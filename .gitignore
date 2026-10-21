@@ -1,0 +1,27 @@
+# Dados de origem e dados brutos: nunca versionar
+data/source/*
+!data/source/.gitkeep
+data/raw/*
+!data/raw/.gitkeep
+
+# Bancos DuckDB
+*.duckdb
+*.duckdb.wal
+
+# Segredos
+.env
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Sistema / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Enunciado da disciplina
+Data_Engineering_Practical_Assignments_v1.pdf
