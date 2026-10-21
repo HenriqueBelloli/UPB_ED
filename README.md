@@ -61,7 +61,30 @@ Contagem esperada de linhas:
 
 ### Como reproduzir
 
-_A preencher._
+Todos os comandos são executados a partir da raiz do repositório, com o ambiente virtual ativo. O banco DuckDB é criado em `data/northmart.duckdb` (não versionado).
+
+**1. Carregar a camada raw**
+
+```bash
+python src/run_sql.py sql/load_raw.sql
+```
+
+Cria uma tabela `raw_*` para cada arquivo de `data/source/`, sem nenhuma transformação, e no final mostra a contagem de linhas de cada tabela (deve bater com a tabela da seção "Dados de origem").
+
+| Tabela | Origem |
+|---|---|
+| raw_orders | olist_orders_dataset.csv |
+| raw_order_items | olist_order_items_dataset.csv |
+| raw_customers | olist_customers_dataset.csv |
+| raw_products | olist_products_dataset.csv |
+| raw_sellers | olist_sellers_dataset.csv |
+| raw_payments | olist_order_payments_dataset.csv |
+| raw_reviews | olist_order_reviews_dataset.csv |
+| raw_geolocation | olist_geolocation_dataset.csv |
+| raw_category_translation | product_category_name_translation.csv |
+| raw_seller_profiles | northmart_seller_profiles.json (campos aninhados mantidos como STRUCT) |
+
+_Próximos passos (profiling, build do modelo, export e benchmark) a preencher._
 
 ### Tarefa 1 — Achados do profiling
 
