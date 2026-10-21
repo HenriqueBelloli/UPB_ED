@@ -16,6 +16,10 @@ import duckdb
 # Caminho do banco. Se o arquivo não existir, o DuckDB cria.
 DB_PATH = "data/northmart.duckdb"
 
+# Força a saída em UTF-8. Sem isso, no Windows, salvar a saída num
+# arquivo (com ">") quebra ao encontrar alguns acentos dos dados.
+sys.stdout.reconfigure(encoding="utf-8")
+
 
 # 1. Abre a conexão com o banco
 con = duckdb.connect(DB_PATH)
@@ -32,9 +36,14 @@ for sql_file in sys.argv[1:]:
     for statement in con.extract_statements(sql_text):
         result = con.execute(statement)
 
-        # 2.3 Se o comando for um SELECT, mostra a query e o resultado
+        # 2.3 Se o comando for um SELECT, mostra a query e o resultado.
+        #     As linhas de comentário (--) são tiradas da query mostrada,
+        #     porque o DuckDB junta ao comando os comentários que vêm
+        #     logo depois dele no arquivo.
         if statement.type == duckdb.StatementType.SELECT:
-            print("\n" + statement.query.strip())
+            linhas = statement.query.strip().splitlines()
+            linhas_sem_comentario = [l for l in linhas if not l.strip().startswith("--")]
+            print("\n" + "\n".join(linhas_sem_comentario).strip())
             print(result.df().to_string(index=False))
 
 # 3. Fecha a conexão (grava tudo no arquivo do banco)
