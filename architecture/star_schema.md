@@ -13,7 +13,7 @@ erDiagram
 
     fact_sales {
         varchar order_id PK "chave degenerada: pedido"
-        integer order_item_id PK "posição do item no pedido"
+        bigint order_item_id PK "posição do item no pedido"
         integer date_key FK "data da compra"
         integer customer_key FK "cliente do pedido"
         integer product_key FK "produto vendido"
@@ -27,13 +27,13 @@ erDiagram
     dim_date {
         integer date_key PK "AAAAMMDD"
         date full_date
-        integer year
-        integer quarter
-        integer month
+        bigint year
+        bigint quarter
+        bigint month
         varchar month_name
         varchar year_month "AAAA-MM"
-        integer day
-        integer day_of_week "1 = segunda ... 7 = domingo"
+        bigint day
+        bigint day_of_week "1 = segunda ... 7 = domingo"
         varchar day_name
         boolean is_weekend
     }
@@ -52,13 +52,13 @@ erDiagram
         varchar product_id "chave natural"
         varchar category_name "português; sem_categoria se nulo"
         varchar category_name_english "nome em português se não houver tradução"
-        integer name_length
-        integer description_length
-        integer photos_qty
-        integer weight_g
-        integer length_cm
-        integer height_cm
-        integer width_cm
+        bigint name_length
+        bigint description_length
+        bigint photos_qty
+        bigint weight_g
+        bigint length_cm
+        bigint height_cm
+        bigint width_cm
     }
 
     dim_seller {
@@ -69,7 +69,7 @@ erDiagram
         varchar state
         varchar tier "bronze, silver, gold ou unknown (JSON)"
         date joined_on "data de entrada (JSON)"
-        integer handling_days "dias para despachar (JSON)"
+        bigint handling_days "dias para despachar (JSON)"
     }
 ```
 

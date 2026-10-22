@@ -1,0 +1,164 @@
+﻿
+========== sql\load_raw.sql ==========
+
+SELECT 'raw_orders'               AS tabela, count(*) AS linhas FROM raw_orders
+UNION ALL
+SELECT 'raw_order_items'          AS tabela, count(*) AS linhas FROM raw_order_items
+UNION ALL
+SELECT 'raw_customers'            AS tabela, count(*) AS linhas FROM raw_customers
+UNION ALL
+SELECT 'raw_products'             AS tabela, count(*) AS linhas FROM raw_products
+UNION ALL
+SELECT 'raw_sellers'              AS tabela, count(*) AS linhas FROM raw_sellers
+UNION ALL
+SELECT 'raw_payments'             AS tabela, count(*) AS linhas FROM raw_payments
+UNION ALL
+SELECT 'raw_reviews'              AS tabela, count(*) AS linhas FROM raw_reviews
+UNION ALL
+SELECT 'raw_geolocation'          AS tabela, count(*) AS linhas FROM raw_geolocation
+UNION ALL
+SELECT 'raw_category_translation' AS tabela, count(*) AS linhas FROM raw_category_translation
+UNION ALL
+SELECT 'raw_seller_profiles'      AS tabela, count(*) AS linhas FROM raw_seller_profiles;
+                  tabela  linhas
+              raw_orders   99441
+         raw_order_items  112650
+           raw_customers   99441
+            raw_products   32951
+             raw_sellers    3095
+            raw_payments  103886
+             raw_reviews   99224
+         raw_geolocation 1000163
+raw_category_translation      71
+     raw_seller_profiles    3095
+
+========== sql\build_model.sql ==========
+
+WITH checagens AS (
+
+    SELECT 'fato: linhas iguais às de raw_order_items' AS verificacao,
+           (SELECT count(*) FROM fact_sales)      AS encontrado,
+           (SELECT count(*) FROM raw_order_items) AS esperado
+
+    UNION ALL
+    SELECT 'fato: order_id + order_item_id sem duplicados',
+           (SELECT count(*) - count(DISTINCT (order_id, order_item_id)) FROM fact_sales),
+           0
+
+    UNION ALL
+    SELECT 'fato: soma de price (em centavos) igual à de raw_order_items',
+           (SELECT CAST(round(sum(price) * 100) AS BIGINT) FROM fact_sales),
+           (SELECT CAST(round(sum(price) * 100) AS BIGINT) FROM raw_order_items)
+
+    UNION ALL
+    SELECT 'órfãos: fato sem dim_date',
+           (SELECT count(*) FROM fact_sales AS f
+            LEFT JOIN dim_date AS d ON d.date_key = f.date_key
+            WHERE d.date_key IS NULL),
+           0
+    UNION ALL
+    SELECT 'órfãos: fato sem dim_customer',
+           (SELECT count(*) FROM fact_sales AS f
+            LEFT JOIN dim_customer AS d ON d.customer_key = f.customer_key
+            WHERE d.customer_key IS NULL),
+           0
+    UNION ALL
+    SELECT 'órfãos: fato sem dim_product',
+           (SELECT count(*) FROM fact_sales AS f
+            LEFT JOIN dim_product AS d ON d.product_key = f.product_key
+            WHERE d.product_key IS NULL),
+           0
+    UNION ALL
+    SELECT 'órfãos: fato sem dim_seller',
+           (SELECT count(*) FROM fact_sales AS f
+            LEFT JOIN dim_seller AS d ON d.seller_key = f.seller_key
+            WHERE d.seller_key IS NULL),
+           0
+
+    UNION ALL
+    SELECT 'dim_date: date_key sem duplicados',
+           (SELECT count(*) - count(DISTINCT date_key) FROM dim_date),
+           0
+    UNION ALL
+    SELECT 'dim_customer: uma linha por customer_id de raw_customers',
+           (SELECT count(DISTINCT customer_key) FROM dim_customer),
+           (SELECT count(DISTINCT customer_id) FROM raw_customers)
+    UNION ALL
+    SELECT 'dim_product: uma linha por product_id de raw_products',
+           (SELECT count(DISTINCT product_key) FROM dim_product),
+           (SELECT count(DISTINCT product_id) FROM raw_products)
+    UNION ALL
+    SELECT 'dim_seller: uma linha por seller_id de raw_sellers',
+           (SELECT count(DISTINCT seller_key) FROM dim_seller),
+           (SELECT count(DISTINCT seller_id) FROM raw_sellers)
+    UNION ALL
+    SELECT 'dim_seller: nenhum seller_id repetido',
+           (SELECT count(*) - count(DISTINCT seller_id) FROM dim_seller),
+           0
+
+    UNION ALL
+    SELECT 'stg_seller_profiles: um perfil por seller',
+           (SELECT count(*) - count(DISTINCT seller_id) FROM stg_seller_profiles),
+           0
+    UNION ALL
+    SELECT 'dim_seller: tier fora de bronze/silver/gold/unknown',
+           (SELECT count(*) FROM dim_seller
+            WHERE tier NOT IN ('bronze', 'silver', 'gold', 'unknown')),
+           0
+    UNION ALL
+    SELECT 'dim_seller: handling_days menor ou igual a zero',
+           (SELECT count(*) FROM dim_seller WHERE handling_days <= 0),
+           0
+)
+SELECT
+    verificacao,
+    encontrado,
+    esperado,
+    CASE WHEN encontrado = esperado THEN 'OK' ELSE 'FALHA' END AS resultado
+FROM checagens;
+                                                 verificacao  encontrado   esperado resultado
+                   fato: linhas iguais às de raw_order_items      112650     112650        OK
+               fato: order_id + order_item_id sem duplicados           0          0        OK
+fato: soma de price (em centavos) igual à de raw_order_items  1359164370 1359164370        OK
+                                   órfãos: fato sem dim_date           0          0        OK
+                               órfãos: fato sem dim_customer           0          0        OK
+                                órfãos: fato sem dim_product           0          0        OK
+                                 órfãos: fato sem dim_seller           0          0        OK
+                           dim_date: date_key sem duplicados           0          0        OK
+    dim_customer: uma linha por customer_id de raw_customers       99441      99441        OK
+       dim_product: uma linha por product_id de raw_products       32951      32951        OK
+          dim_seller: uma linha por seller_id de raw_sellers        3095       3095        OK
+                       dim_seller: nenhum seller_id repetido           0          0        OK
+                   stg_seller_profiles: um perfil por seller           0          0        OK
+         dim_seller: tier fora de bronze/silver/gold/unknown           0          0        OK
+             dim_seller: handling_days menor ou igual a zero           0          0        OK
+
+SELECT 'fact_sales'   AS tabela, count(*) AS linhas FROM fact_sales
+UNION ALL
+SELECT 'dim_date'     AS tabela, count(*) AS linhas FROM dim_date
+UNION ALL
+SELECT 'dim_customer' AS tabela, count(*) AS linhas FROM dim_customer
+UNION ALL
+SELECT 'dim_product'  AS tabela, count(*) AS linhas FROM dim_product
+UNION ALL
+SELECT 'dim_seller'   AS tabela, count(*) AS linhas FROM dim_seller;
+      tabela  linhas
+  fact_sales  112650
+    dim_date     791
+dim_customer   99441
+ dim_product   32951
+  dim_seller    3095
+
+SELECT tier,
+       count(*)           AS sellers,
+       avg(handling_days) AS media_handling_days
+FROM dim_seller
+GROUP BY tier
+ORDER BY sellers DESC;
+   tier  sellers  media_handling_days
+ bronze     1828             2.280508
+ silver      919             2.306257
+   gold      308             2.412541
+unknown       40                  NaN
+
+Concluído.

@@ -92,7 +92,15 @@ python src/run_sql.py sql/profiling.sql > evidence/profiling_output.txt
 
 Roda todas as verificações de qualidade sobre as tabelas raw e guarda a saída (queries e resultados) em `evidence/profiling_output.txt`. Os achados estão na seção "Tarefa 1".
 
-_Próximos passos (build do modelo, export e benchmark) a preencher._
+**3. Construir o star schema**
+
+```bash
+python src/run_sql.py sql/load_raw.sql sql/build_model.sql > evidence/build_model_output.txt
+```
+
+Recarrega a camada raw a partir dos arquivos de origem e, em seguida, constrói o modelo: achata e deduplica os perfis do JSON (`stg_seller_profiles`), cria `dim_date`, `dim_customer`, `dim_product`, `dim_seller` e `fact_sales`, e termina com 15 checagens referenciais e de qualidade. A saída fica em `evidence/build_model_output.txt`. Todas as checagens devem mostrar `OK`.
+
+_Próximos passos (export e benchmark) a preencher._
 
 ### Tarefa 1 — Achados do profiling
 
@@ -195,7 +203,7 @@ erDiagram
 
     fact_sales {
         varchar order_id PK
-        integer order_item_id PK
+        bigint order_item_id PK
         integer date_key FK
         integer customer_key FK
         integer product_key FK
@@ -228,7 +236,7 @@ erDiagram
         varchar state
         varchar tier
         date joined_on
-        integer handling_days
+        bigint handling_days
     }
 ```
 
@@ -239,6 +247,34 @@ erDiagram
 **Dimensões:** `dim_date` (calendário contínuo de 791 dias, 2016-09-01 a 2018-10-31), `dim_customer` (99 441 linhas), `dim_product` (32 951) e `dim_seller` (3 095, com `tier`, `joined_on` e `handling_days` vindos do JSON).
 
 **Decisão de modelagem não óbvia — a `dim_customer` tem uma linha por `customer_id`, não por pessoa.** Na Olist, o `customer_id` é criado a cada pedido: são 99 441 ids para 96 096 pessoas (`customer_unique_id`). Escolhemos o `customer_id` como grão da dimensão porque o pedido já traz esse id (o JOIN com a fato é direto) e porque cada linha guarda o endereço daquela compra: 250 pessoas mudaram de CEP entre pedidos, e com uma linha por pessoa seria preciso escolher um endereço e reescrever o histórico. O `customer_unique_id` fica como atributo da dimensão, e é ele que conta clientes: `count(DISTINCT customer_unique_id)`. Contar por `customer_key` infla o número de clientes em 3,5%.
+
+### Tarefa 3 — Implementação do modelo
+
+Script: [`sql/build_model.sql`](sql/build_model.sql) · Saída: [`evidence/build_model_output.txt`](evidence/build_model_output.txt)
+
+O modelo é construído só com SQL, a partir das tabelas raw, nesta ordem:
+
+1. **`stg_seller_profiles`**: achata os campos aninhados do JSON (`profile.tier`, `profile.joined_on`, `shipping.handling_days`), normaliza o tier com `lower(trim(...))` e mantém só a versão mais recente de cada seller (`row_number()` por `seller_id`, ordenado por `updated_at` decrescente). Resultado: 3 070 perfis, um por seller.
+2. **Dimensões**: cada uma ganha uma surrogate key inteira, gerada com `row_number()` na ordem da chave natural, para que a mesma linha receba a mesma chave a cada execução. A `dim_seller` parte dos 3 095 sellers da Olist e recebe `tier`, `joined_on` e `handling_days` do perfil, com `tier = 'unknown'` para os 40 sellers sem perfil.
+3. **`fact_sales`**: uma linha por item de `raw_order_items`, com a data e o status vindos de `raw_orders` e as surrogate keys das dimensões. Todos os JOINs são `LEFT JOIN`, para que um item sem correspondência não desapareça em silêncio: ele fica com a chave nula, e as checagens acusam.
+4. **Checagens**: 15 verificações que comparam o valor encontrado com o esperado.
+
+| Verificação | Encontrado | Esperado | Resultado |
+|---|---:|---:|---|
+| Fato: linhas iguais às de `raw_order_items` | 112 650 | 112 650 | OK |
+| Fato: `order_id + order_item_id` sem duplicados | 0 | 0 | OK |
+| Fato: soma de `price` (em centavos) igual à da raw | 1 359 164 370 | 1 359 164 370 | OK |
+| Órfãos: fato sem `dim_date` / `dim_customer` / `dim_product` / `dim_seller` | 0 / 0 / 0 / 0 | 0 | OK |
+| `dim_date`: `date_key` sem duplicados | 0 | 0 | OK |
+| `dim_customer`, `dim_product`, `dim_seller`: uma linha por chave natural da raw | 99 441 / 32 951 / 3 095 | 99 441 / 32 951 / 3 095 | OK |
+| `dim_seller`: nenhum `seller_id` repetido | 0 | 0 | OK |
+| `stg_seller_profiles`: um perfil por seller | 0 | 0 | OK |
+| `dim_seller`: tier fora de `bronze`/`silver`/`gold`/`unknown` | 0 | 0 | OK |
+| `dim_seller`: `handling_days` ≤ 0 | 0 | 0 | OK |
+
+As checagens também foram testadas no sentido contrário: numa cópia do banco, apagamos um seller, duplicamos um item da fato e gravamos um tier `'Gold '`. Seis checagens passaram a mostrar `FALHA` (linhas, duplicados, soma, órfãos de seller, linhas da `dim_seller` e tier fora do padrão).
+
+Sellers por tier depois do tratamento: `bronze` 1 828, `silver` 919, `gold` 308 e `unknown` 40.
 
 ### Tarefa 4 — Benchmark
 
