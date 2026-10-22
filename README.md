@@ -122,7 +122,7 @@ O profiling mediu, em todas as 10 tabelas raw: quantidade de linhas, unicidade d
 |---|---|---|---|
 | 1 | JSON | **25 `seller_id` repetidos**: 3 095 registros para 3 070 sellers. Cada um tem duas versões; a mais antiga é sempre de 2017-06-15 09:00, e em 7 casos o `tier` muda entre as versões (ex.: bronze → silver). | Juntar direto com a fato duplicaria as vendas desses sellers. Fica só a versão com o `updated_at` mais recente. |
 | 2 | JSON | **`tier` escrito de 9 formas**: além de `bronze`, `silver` e `gold`, aparecem `Bronze ` (com espaço, 21), `BRONZE` (19), `SILVER` (7), `Silver ` (6), `Gold ` (5) e `GOLD` (2). **30 perfis não têm o bloco `shipping`**, logo não têm `handling_days`. | Agrupar por tier daria 9 grupos em vez de 3. O tier passa por `lower(trim(...))`. O `handling_days` ausente fica nulo (desconhecido), não 0. |
-| 3 | JSON | **Cobertura incompleta nos dois sentidos**: 15 perfis não pertencem a nenhum seller da Olist e são dados de teste (e-mail `new_N@example.com`, mesmo telefone `+55 11 90000-0000`, mesmo `updated_at`). E 40 sellers da Olist não têm perfil; eles vendem 769 itens, R$ 78 585,05. | Os 15 perfis de teste são descartados (a `dim_seller` parte de `raw_sellers`). Os 40 sellers sem perfil continuam no modelo com tier "desconhecido", para não perder as vendas deles. |
+| 3 | JSON | **Cobertura incompleta nos dois sentidos**: 15 perfis não pertencem a nenhum seller da Olist e são dados de teste (e-mail `new_N@example.com`, mesmo telefone `+55 11 90000-0000`, mesmo `updated_at`). E 40 sellers da Olist não têm perfil; eles vendem 769 itens, R$ 78 585,05. | Os 15 perfis de teste são descartados (a `dim_seller` parte de `raw_sellers`). Os 40 sellers sem perfil continuam no modelo com tier `unknown`, para não perder as vendas deles. |
 | 4 | JSON | **141 perfis com `joined_on` depois do `updated_at`**: o perfil teria sido atualizado antes de o seller existir. Já o `joined_on` é coerente com as vendas: nenhum seller vendeu antes da data de entrada. | O `joined_on` é usado como data de entrada. O `updated_at` serve só para escolher a versão mais recente do perfil. |
 | 5 | customers | **`customer_id` não identifica a pessoa**: são 99 441 `customer_id` para 96 096 pessoas (`customer_unique_id`). O `customer_id` muda a cada pedido, e 3 345 registros são da mesma pessoa voltando a comprar. | Contar clientes por `customer_id` infla o número em 3,5%. A `dim_customer` guarda o `customer_unique_id` como atributo e a contagem de clientes usa ele. |
 | 6 | products | **610 produtos sem categoria** (1,85%), que também não têm nome, descrição nem fotos. Eles somam 1 603 itens vendidos e R$ 179 535,28. Além disso, 2 categorias não têm tradução (`pc_gamer` e `portateis_cozinha_e_preparadores_de_alimentos`), com 24 itens. | Um JOIN simples descartaria R$ 185 mil de vendas no top 5 de categorias. Produto sem categoria recebe "sem_categoria" e categoria sem tradução usa o nome em português. |
@@ -176,7 +176,7 @@ Para que esses problemas não voltem sem ninguém perceber, o `build_model.sql` 
 - A fato tem 112 650 linhas e a mesma soma de `price` da `raw_order_items` (nenhum item perdido ou duplicado nos JOINs).
 - Nenhuma linha da fato sem dimensão correspondente (0 órfãos em cada chave).
 - A `dim_seller` tem exatamente uma linha por `seller_id` (3 095).
-- O `tier` só tem os valores `bronze`, `silver`, `gold` ou `desconhecido`.
+- O `tier` só tem os valores `bronze`, `silver`, `gold` ou `unknown`.
 - O `handling_days` é nulo ou maior que zero.
 - As surrogate keys de cada dimensão são únicas.
 
@@ -184,7 +184,61 @@ No PA2, essas mesmas regras viram testes do dbt.
 
 ### Tarefa 2 — Star schema
 
-_A preencher: diagrama, grão, medidas e decisão de modelagem._
+Diagrama completo, dicionário de colunas e todas as decisões: [`architecture/star_schema.md`](architecture/star_schema.md)
+
+```mermaid
+erDiagram
+    dim_date     ||--o{ fact_sales : "date_key"
+    dim_customer ||--o{ fact_sales : "customer_key"
+    dim_product  ||--o{ fact_sales : "product_key"
+    dim_seller   ||--o{ fact_sales : "seller_key"
+
+    fact_sales {
+        varchar order_id PK
+        integer order_item_id PK
+        integer date_key FK
+        integer customer_key FK
+        integer product_key FK
+        integer seller_key FK
+        varchar order_status
+        double price
+        double freight_value
+        double total_value
+    }
+    dim_date {
+        integer date_key PK
+        date full_date
+        varchar year_month
+    }
+    dim_customer {
+        integer customer_key PK
+        varchar customer_id
+        varchar customer_unique_id
+        varchar state
+    }
+    dim_product {
+        integer product_key PK
+        varchar product_id
+        varchar category_name
+        varchar category_name_english
+    }
+    dim_seller {
+        integer seller_key PK
+        varchar seller_id
+        varchar state
+        varchar tier
+        date joined_on
+        integer handling_days
+    }
+```
+
+**Grão:** uma linha por item de pedido (`order_id + order_item_id`), ou seja, uma unidade de um produto vendida por um seller num pedido. São 112 650 linhas. Esse grão é necessário porque preço, frete, produto e seller pertencem ao item: 1 278 pedidos têm itens de mais de um seller, e a fonte não tem coluna de quantidade (3 unidades do mesmo produto viram 3 linhas).
+
+**Medidas:** `price` (preço do item), `freight_value` (frete do item) e `total_value` (`price + freight_value`), todas aditivas. A quantidade de itens vendidos é `count(*)`. A **receita** é `sum(price)` excluindo os pedidos `canceled` e `unavailable`, que continuam na fato com o `order_status` mas não geraram venda.
+
+**Dimensões:** `dim_date` (calendário contínuo de 791 dias, 2016-09-01 a 2018-10-31), `dim_customer` (99 441 linhas), `dim_product` (32 951) e `dim_seller` (3 095, com `tier`, `joined_on` e `handling_days` vindos do JSON).
+
+**Decisão de modelagem não óbvia — a `dim_customer` tem uma linha por `customer_id`, não por pessoa.** Na Olist, o `customer_id` é criado a cada pedido: são 99 441 ids para 96 096 pessoas (`customer_unique_id`). Escolhemos o `customer_id` como grão da dimensão porque o pedido já traz esse id (o JOIN com a fato é direto) e porque cada linha guarda o endereço daquela compra: 250 pessoas mudaram de CEP entre pedidos, e com uma linha por pessoa seria preciso escolher um endereço e reescrever o histórico. O `customer_unique_id` fica como atributo da dimensão, e é ele que conta clientes: `count(DISTINCT customer_unique_id)`. Contar por `customer_key` infla o número de clientes em 3,5%.
 
 ### Tarefa 4 — Benchmark
 
