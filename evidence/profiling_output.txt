@@ -80,61 +80,139 @@ raw_category_translation         product_category_name      71                71
      raw_seller_profiles                     seller_id    3095              3070          25
 
 SELECT 'raw_orders' AS tabela, column_name AS coluna, null_percentage AS pct_nulos
-FROM (SUMMARIZE raw_orders) WHERE null_percentage > 0
+FROM (SUMMARIZE raw_orders)
 UNION ALL
 SELECT 'raw_order_items', column_name, null_percentage
-FROM (SUMMARIZE raw_order_items) WHERE null_percentage > 0
+FROM (SUMMARIZE raw_order_items)
 UNION ALL
 SELECT 'raw_customers', column_name, null_percentage
-FROM (SUMMARIZE raw_customers) WHERE null_percentage > 0
+FROM (SUMMARIZE raw_customers)
 UNION ALL
 SELECT 'raw_products', column_name, null_percentage
-FROM (SUMMARIZE raw_products) WHERE null_percentage > 0
+FROM (SUMMARIZE raw_products)
 UNION ALL
 SELECT 'raw_sellers', column_name, null_percentage
-FROM (SUMMARIZE raw_sellers) WHERE null_percentage > 0
+FROM (SUMMARIZE raw_sellers)
 UNION ALL
 SELECT 'raw_payments', column_name, null_percentage
-FROM (SUMMARIZE raw_payments) WHERE null_percentage > 0
+FROM (SUMMARIZE raw_payments)
 UNION ALL
 SELECT 'raw_reviews', column_name, null_percentage
-FROM (SUMMARIZE raw_reviews) WHERE null_percentage > 0
+FROM (SUMMARIZE raw_reviews)
 UNION ALL
 SELECT 'raw_geolocation', column_name, null_percentage
-FROM (SUMMARIZE raw_geolocation) WHERE null_percentage > 0;
-      tabela                        coluna  pct_nulos
-  raw_orders             order_approved_at       0.16
-  raw_orders  order_delivered_carrier_date       1.79
-  raw_orders order_delivered_customer_date       2.98
-raw_products         product_category_name       1.85
-raw_products           product_name_lenght       1.85
-raw_products    product_description_lenght       1.85
-raw_products            product_photos_qty       1.85
-raw_products              product_weight_g       0.01
-raw_products             product_length_cm       0.01
-raw_products             product_height_cm       0.01
-raw_products              product_width_cm       0.01
- raw_reviews          review_comment_title      88.34
- raw_reviews        review_comment_message      58.70
+FROM (SUMMARIZE raw_geolocation)
+UNION ALL
+SELECT 'raw_category_translation', column_name, null_percentage
+FROM (SUMMARIZE raw_category_translation);
+                  tabela                        coluna  pct_nulos
+              raw_orders                      order_id       0.00
+              raw_orders                   customer_id       0.00
+              raw_orders                  order_status       0.00
+              raw_orders      order_purchase_timestamp       0.00
+              raw_orders             order_approved_at       0.16
+              raw_orders  order_delivered_carrier_date       1.79
+              raw_orders order_delivered_customer_date       2.98
+              raw_orders order_estimated_delivery_date       0.00
+         raw_order_items                      order_id       0.00
+         raw_order_items                 order_item_id       0.00
+         raw_order_items                    product_id       0.00
+         raw_order_items                     seller_id       0.00
+         raw_order_items           shipping_limit_date       0.00
+         raw_order_items                         price       0.00
+         raw_order_items                 freight_value       0.00
+           raw_customers                   customer_id       0.00
+           raw_customers            customer_unique_id       0.00
+           raw_customers      customer_zip_code_prefix       0.00
+           raw_customers                 customer_city       0.00
+           raw_customers                customer_state       0.00
+            raw_products                    product_id       0.00
+            raw_products         product_category_name       1.85
+            raw_products           product_name_lenght       1.85
+            raw_products    product_description_lenght       1.85
+            raw_products            product_photos_qty       1.85
+            raw_products              product_weight_g       0.01
+            raw_products             product_length_cm       0.01
+            raw_products             product_height_cm       0.01
+            raw_products              product_width_cm       0.01
+             raw_sellers                     seller_id       0.00
+             raw_sellers        seller_zip_code_prefix       0.00
+             raw_sellers                   seller_city       0.00
+             raw_sellers                  seller_state       0.00
+            raw_payments                      order_id       0.00
+            raw_payments            payment_sequential       0.00
+            raw_payments                  payment_type       0.00
+            raw_payments          payment_installments       0.00
+            raw_payments                 payment_value       0.00
+             raw_reviews                     review_id       0.00
+             raw_reviews                      order_id       0.00
+             raw_reviews                  review_score       0.00
+             raw_reviews          review_comment_title      88.34
+             raw_reviews        review_comment_message      58.70
+             raw_reviews          review_creation_date       0.00
+             raw_reviews       review_answer_timestamp       0.00
+         raw_geolocation   geolocation_zip_code_prefix       0.00
+         raw_geolocation               geolocation_lat       0.00
+         raw_geolocation               geolocation_lng       0.00
+         raw_geolocation              geolocation_city       0.00
+         raw_geolocation             geolocation_state       0.00
+raw_category_translation         product_category_name       0.00
+raw_category_translation product_category_name_english       0.00
 
-SELECT 'perfis sem bloco shipping'      AS verificacao, count(*) FILTER (WHERE shipping IS NULL)               AS qtd FROM raw_seller_profiles
+SELECT 'seller_id' AS campo,
+       count(*) FILTER (WHERE seller_id IS NULL) AS nulos,
+       round(100.0 * count(*) FILTER (WHERE seller_id IS NULL) / count(*), 2) AS pct_nulos
+FROM raw_seller_profiles
 UNION ALL
-SELECT 'perfis sem handling_days',       count(*) FILTER (WHERE shipping.handling_days IS NULL)  FROM raw_seller_profiles
+SELECT 'updated_at',
+       count(*) FILTER (WHERE updated_at IS NULL),
+       round(100.0 * count(*) FILTER (WHERE updated_at IS NULL) / count(*), 2)
+FROM raw_seller_profiles
 UNION ALL
-SELECT 'perfis sem tier',                count(*) FILTER (WHERE profile.tier IS NULL)            FROM raw_seller_profiles
+SELECT 'profile.tier',
+       count(*) FILTER (WHERE profile.tier IS NULL),
+       round(100.0 * count(*) FILTER (WHERE profile.tier IS NULL) / count(*), 2)
+FROM raw_seller_profiles
 UNION ALL
-SELECT 'perfis sem joined_on',           count(*) FILTER (WHERE profile.joined_on IS NULL)       FROM raw_seller_profiles
+SELECT 'profile.joined_on',
+       count(*) FILTER (WHERE profile.joined_on IS NULL),
+       round(100.0 * count(*) FILTER (WHERE profile.joined_on IS NULL) / count(*), 2)
+FROM raw_seller_profiles
 UNION ALL
-SELECT 'perfis sem email',               count(*) FILTER (WHERE contact.email IS NULL)           FROM raw_seller_profiles
+SELECT 'contact.email',
+       count(*) FILTER (WHERE contact.email IS NULL),
+       round(100.0 * count(*) FILTER (WHERE contact.email IS NULL) / count(*), 2)
+FROM raw_seller_profiles
 UNION ALL
-SELECT 'perfis sem updated_at',          count(*) FILTER (WHERE updated_at IS NULL)              FROM raw_seller_profiles;
-              verificacao  qtd
-perfis sem bloco shipping   30
- perfis sem handling_days   30
-          perfis sem tier    0
-     perfis sem joined_on    0
-         perfis sem email    0
-    perfis sem updated_at    0
+SELECT 'contact.phone',
+       count(*) FILTER (WHERE contact.phone IS NULL),
+       round(100.0 * count(*) FILTER (WHERE contact.phone IS NULL) / count(*), 2)
+FROM raw_seller_profiles
+UNION ALL
+SELECT 'shipping (bloco inteiro)',
+       count(*) FILTER (WHERE shipping IS NULL),
+       round(100.0 * count(*) FILTER (WHERE shipping IS NULL) / count(*), 2)
+FROM raw_seller_profiles
+UNION ALL
+SELECT 'shipping.carriers',
+       count(*) FILTER (WHERE shipping.carriers IS NULL),
+       round(100.0 * count(*) FILTER (WHERE shipping.carriers IS NULL) / count(*), 2)
+FROM raw_seller_profiles
+UNION ALL
+SELECT 'shipping.handling_days',
+       count(*) FILTER (WHERE shipping.handling_days IS NULL),
+       round(100.0 * count(*) FILTER (WHERE shipping.handling_days IS NULL) / count(*), 2)
+FROM raw_seller_profiles;
+                   campo  nulos  pct_nulos
+               seller_id      0       0.00
+              updated_at      0       0.00
+            profile.tier      0       0.00
+       profile.joined_on      0       0.00
+           contact.email      0       0.00
+           contact.phone      0       0.00
+shipping (bloco inteiro)     30       0.97
+       shipping.carriers     30       0.97
+  shipping.handling_days     30       0.97
 
 SELECT 'itens sem pedido em raw_orders'          AS verificacao, count(*) AS qtd
 FROM raw_order_items WHERE order_id NOT IN (SELECT order_id FROM raw_orders)
@@ -385,17 +463,17 @@ FROM raw_customers
 GROUP BY customer_zip_code_prefix
 HAVING count(DISTINCT customer_city) > 1
 LIMIT 10;
-customer_zip_code_prefix                                          cidades
-                   06835                           [embu das artes, embu]
-                   13453   [santa barbara d oeste, santa barbara d'oeste]
-                   85575          [sao jorge d'oeste, sao jorge do oeste]
-                   15720             [palmeira d oeste, palmeira d'oeste]
-                   45816 [porto seguro, arraial d'ajuda, arraial d ajuda]
-                   15650               [estrela d oeste, estrela d'oeste]
-                   72270                            [ceilandia, brasilia]
-                   23970                                 [paraty, parati]
-                   55485            [santo antonio das queimadas, jurema]
-                   06806                           [embu das artes, embu]
+customer_zip_code_prefix                                        cidades
+                   23970                               [paraty, parati]
+                   13453 [santa barbara d'oeste, santa barbara d oeste]
+                   85575        [sao jorge d'oeste, sao jorge do oeste]
+                   06835                         [embu das artes, embu]
+                   15720           [palmeira d oeste, palmeira d'oeste]
+                   06806                         [embu das artes, embu]
+                   55485          [jurema, santo antonio das queimadas]
+                   13820              [monte alegre do sul, jaguariuna]
+                   13450 [santa barbara d'oeste, santa barbara d oeste]
+                   36576                          [porto firme, vicosa]
 
 SELECT 'produtos sem categoria' AS verificacao,
        count(*) FILTER (WHERE product_category_name IS NULL) AS qtd
@@ -434,9 +512,9 @@ JOIN raw_products AS p ON p.product_id = i.product_id
 LEFT JOIN raw_category_translation AS t ON t.product_category_name = p.product_category_name
 GROUP BY situacao;
               situacao  itens     receita
+         sem categoria   1603   179535.28
 categoria sem tradução     24     5514.48
                     ok 111023 13406593.94
-         sem categoria   1603   179535.28
 
 SELECT product_category_name
 FROM raw_category_translation
@@ -495,17 +573,17 @@ ORDER BY sellers DESC;
                seller_city  sellers
                  sao paulo      694
             sao paulo - sp        3
-                   sp / sp        1
-       jacarei / sao paulo        1
-                são paulo        1
-                sao paulop        1
-                sao  paulo        1
-            maua/sao paulo        1
-     santo andre/sao paulo        1
    carapicuiba / sao paulo        1
+            maua/sao paulo        1
 ribeirao preto / sao paulo        1
+     santo andre/sao paulo        1
      sao paulo / sao paulo        1
               sao paulo sp        1
+                   sp / sp        1
+       jacarei / sao paulo        1
+                sao  paulo        1
+                são paulo        1
+                sao paulop        1
 
 SELECT count(*) AS sellers_repetidos,
        sum(versoes) AS registros_envolvidos,

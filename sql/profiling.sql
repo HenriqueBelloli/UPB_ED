@@ -104,47 +104,87 @@ FROM raw_seller_profiles;
 -- 2. PORCENTAGEM DE NULOS
 --
 -- SUMMARIZE calcula estatísticas de todas as colunas de uma tabela.
--- Aqui usamos só a coluna null_percentage e mostramos apenas as
--- colunas que têm algum nulo.
+-- Aqui usamos só a coluna null_percentage (porcentagem de nulos).
+-- Todas as colunas aparecem, inclusive as com 0%, para mostrar que
+-- todas foram verificadas.
 -- =====================================================================
 
 SELECT 'raw_orders' AS tabela, column_name AS coluna, null_percentage AS pct_nulos
-FROM (SUMMARIZE raw_orders) WHERE null_percentage > 0
+FROM (SUMMARIZE raw_orders)
 UNION ALL
 SELECT 'raw_order_items', column_name, null_percentage
-FROM (SUMMARIZE raw_order_items) WHERE null_percentage > 0
+FROM (SUMMARIZE raw_order_items)
 UNION ALL
 SELECT 'raw_customers', column_name, null_percentage
-FROM (SUMMARIZE raw_customers) WHERE null_percentage > 0
+FROM (SUMMARIZE raw_customers)
 UNION ALL
 SELECT 'raw_products', column_name, null_percentage
-FROM (SUMMARIZE raw_products) WHERE null_percentage > 0
+FROM (SUMMARIZE raw_products)
 UNION ALL
 SELECT 'raw_sellers', column_name, null_percentage
-FROM (SUMMARIZE raw_sellers) WHERE null_percentage > 0
+FROM (SUMMARIZE raw_sellers)
 UNION ALL
 SELECT 'raw_payments', column_name, null_percentage
-FROM (SUMMARIZE raw_payments) WHERE null_percentage > 0
+FROM (SUMMARIZE raw_payments)
 UNION ALL
 SELECT 'raw_reviews', column_name, null_percentage
-FROM (SUMMARIZE raw_reviews) WHERE null_percentage > 0
+FROM (SUMMARIZE raw_reviews)
 UNION ALL
 SELECT 'raw_geolocation', column_name, null_percentage
-FROM (SUMMARIZE raw_geolocation) WHERE null_percentage > 0;
+FROM (SUMMARIZE raw_geolocation)
+UNION ALL
+SELECT 'raw_category_translation', column_name, null_percentage
+FROM (SUMMARIZE raw_category_translation);
 
--- Nulos dentro dos campos aninhados do JSON.
+-- Nulos no JSON, campo por campo, incluindo os campos aninhados.
+-- O SUMMARIZE só olha o primeiro nível (profile, contact, shipping),
+-- então aqui cada campo de dentro é verificado separadamente.
 -- profile.tier lê o campo "tier" de dentro do STRUCT "profile".
-SELECT 'perfis sem bloco shipping'      AS verificacao, count(*) FILTER (WHERE shipping IS NULL)               AS qtd FROM raw_seller_profiles
+-- pct_nulos = nulos / total de registros * 100
+SELECT 'seller_id' AS campo,
+       count(*) FILTER (WHERE seller_id IS NULL) AS nulos,
+       round(100.0 * count(*) FILTER (WHERE seller_id IS NULL) / count(*), 2) AS pct_nulos
+FROM raw_seller_profiles
 UNION ALL
-SELECT 'perfis sem handling_days',       count(*) FILTER (WHERE shipping.handling_days IS NULL)  FROM raw_seller_profiles
+SELECT 'updated_at',
+       count(*) FILTER (WHERE updated_at IS NULL),
+       round(100.0 * count(*) FILTER (WHERE updated_at IS NULL) / count(*), 2)
+FROM raw_seller_profiles
 UNION ALL
-SELECT 'perfis sem tier',                count(*) FILTER (WHERE profile.tier IS NULL)            FROM raw_seller_profiles
+SELECT 'profile.tier',
+       count(*) FILTER (WHERE profile.tier IS NULL),
+       round(100.0 * count(*) FILTER (WHERE profile.tier IS NULL) / count(*), 2)
+FROM raw_seller_profiles
 UNION ALL
-SELECT 'perfis sem joined_on',           count(*) FILTER (WHERE profile.joined_on IS NULL)       FROM raw_seller_profiles
+SELECT 'profile.joined_on',
+       count(*) FILTER (WHERE profile.joined_on IS NULL),
+       round(100.0 * count(*) FILTER (WHERE profile.joined_on IS NULL) / count(*), 2)
+FROM raw_seller_profiles
 UNION ALL
-SELECT 'perfis sem email',               count(*) FILTER (WHERE contact.email IS NULL)           FROM raw_seller_profiles
+SELECT 'contact.email',
+       count(*) FILTER (WHERE contact.email IS NULL),
+       round(100.0 * count(*) FILTER (WHERE contact.email IS NULL) / count(*), 2)
+FROM raw_seller_profiles
 UNION ALL
-SELECT 'perfis sem updated_at',          count(*) FILTER (WHERE updated_at IS NULL)              FROM raw_seller_profiles;
+SELECT 'contact.phone',
+       count(*) FILTER (WHERE contact.phone IS NULL),
+       round(100.0 * count(*) FILTER (WHERE contact.phone IS NULL) / count(*), 2)
+FROM raw_seller_profiles
+UNION ALL
+SELECT 'shipping (bloco inteiro)',
+       count(*) FILTER (WHERE shipping IS NULL),
+       round(100.0 * count(*) FILTER (WHERE shipping IS NULL) / count(*), 2)
+FROM raw_seller_profiles
+UNION ALL
+SELECT 'shipping.carriers',
+       count(*) FILTER (WHERE shipping.carriers IS NULL),
+       round(100.0 * count(*) FILTER (WHERE shipping.carriers IS NULL) / count(*), 2)
+FROM raw_seller_profiles
+UNION ALL
+SELECT 'shipping.handling_days',
+       count(*) FILTER (WHERE shipping.handling_days IS NULL),
+       round(100.0 * count(*) FILTER (WHERE shipping.handling_days IS NULL) / count(*), 2)
+FROM raw_seller_profiles;
 
 
 -- =====================================================================

@@ -100,6 +100,22 @@ Script: [`sql/profiling.sql`](sql/profiling.sql) · Saída completa: [`evidence/
 
 O profiling mediu, em todas as 10 tabelas raw: quantidade de linhas, unicidade das chaves, duplicados, porcentagem de nulos, registros órfãos entre tabelas e regras de negócio (ordem das datas, valores impossíveis, textos sem padrão).
 
+#### Resumo por tabela: linhas, chaves, duplicados e nulos
+
+| Tabela | Linhas | Chave | Valores distintos da chave | Duplicados na chave | Colunas com nulos (% de nulos) |
+|---|---:|---|---:|---:|---|
+| raw_orders | 99 441 | `order_id` | 99 441 | 0 | `order_approved_at` 0,16%, `order_delivered_carrier_date` 1,79%, `order_delivered_customer_date` 2,98% |
+| raw_order_items | 112 650 | `order_id + order_item_id` | 112 650 | 0 | nenhuma |
+| raw_customers | 99 441 | `customer_id` | 99 441 | 0 | nenhuma |
+| raw_customers | 99 441 | `customer_unique_id` (pessoa) | 96 096 | 3 345 (mesma pessoa em pedidos diferentes) | — |
+| raw_products | 32 951 | `product_id` | 32 951 | 0 | `product_category_name`, `product_name_lenght`, `product_description_lenght`, `product_photos_qty` 1,85%; peso e dimensões 0,01% |
+| raw_sellers | 3 095 | `seller_id` | 3 095 | 0 | nenhuma |
+| raw_payments | 103 886 | `order_id + payment_sequential` | 103 886 | 0 | nenhuma |
+| raw_reviews | 99 224 | `review_id` | 98 410 | 814 | `review_comment_title` 88,34%, `review_comment_message` 58,70% |
+| raw_geolocation | 1 000 163 | `geolocation_zip_code_prefix` | 19 015 | 981 148 (não é chave; 261 831 linhas são cópias exatas) | nenhuma |
+| raw_category_translation | 71 | `product_category_name` | 71 | 0 | nenhuma |
+| raw_seller_profiles (JSON) | 3 095 | `seller_id` | 3 070 | 25 | `shipping`, `shipping.carriers`, `shipping.handling_days` 0,97% (30 perfis) |
+
 #### Principais achados
 
 | # | Fonte | Achado | Impacto e tratamento no modelo |
