@@ -25,3 +25,7 @@ Thumbs.db
 
 # Enunciado da disciplina
 Data_Engineering_Practical_Assignments_v1.pdf
+
+# CSV da fato: usado só como base de comparação no benchmark,
+# é gerado de novo pelo export_parquet.sql
+data/curated/*.csv

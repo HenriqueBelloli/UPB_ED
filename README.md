@@ -100,7 +100,21 @@ python src/run_sql.py sql/load_raw.sql sql/build_model.sql > evidence/build_mode
 
 Recarrega a camada raw a partir dos arquivos de origem e, em seguida, constrói o modelo: achata e deduplica os perfis do JSON (`stg_seller_profiles`), cria `dim_date`, `dim_customer`, `dim_product`, `dim_seller` e `fact_sales`, e termina com 15 checagens referenciais e de qualidade. A saída fica em `evidence/build_model_output.txt`. Todas as checagens devem mostrar `OK`.
 
-_Próximos passos (export e benchmark) a preencher._
+**4. Exportar a fato para CSV e Parquet**
+
+```bash
+python src/run_sql.py sql/export_parquet.sql
+```
+
+Gera em `data/curated/` a mesma fato em três formatos: `fact_sales.csv`, `fact_sales.parquet` e `fact_sales_partitioned/` (uma pasta por `year_month`). No final, confere que os três têm 112 650 linhas e a mesma soma de `price`. O CSV não é versionado (é só a base de comparação e é recriado por este passo).
+
+**5. Rodar o benchmark**
+
+```bash
+python src/benchmark.py > evidence/benchmark_output.txt
+```
+
+Mede o tamanho de cada formato e o tempo das três queries de `sql/benchmark_queries.sql` em cada um, confere se as respostas são iguais nos três formatos e grava os números em `evidence/benchmark_results.csv`.
 
 ### Tarefa 1 — Achados do profiling
 
@@ -278,7 +292,35 @@ Sellers por tier depois do tratamento: `bronze` 1 828, `silver` 919, `gold` 308 
 
 ### Tarefa 4 — Benchmark
 
-_A preencher: método e tabela de resultados._
+Scripts: [`sql/export_parquet.sql`](sql/export_parquet.sql), [`sql/benchmark_queries.sql`](sql/benchmark_queries.sql), [`src/benchmark.py`](src/benchmark.py) · Saída: [`evidence/benchmark_output.txt`](evidence/benchmark_output.txt), [`evidence/benchmark_results.csv`](evidence/benchmark_results.csv)
+
+#### Método
+
+- **Mesmos dados nos três formatos.** A `fact_sales` (112 650 linhas) foi exportada, com a coluna `year_month`, para CSV, Parquet num arquivo só e Parquet particionado por `year_month`. O DuckDB comprime o Parquet com snappy, que é o padrão.
+- **Coluna de partição: `year_month`, o mês da compra.** As análises de vendas são quase sempre por período, e a query 2 filtra um único mês. São 24 partições: os meses 2016-11 e 2018-10 não têm itens vendidos.
+- **Mesmas queries nos três formatos.** As queries leem a fato por uma view `fato`, que o `benchmark.py` recria apontando para cada formato. O texto das queries não muda; as dimensões vêm do banco DuckDB. Em todas, a receita exclui os pedidos `canceled` e `unavailable`.
+- **Repetições.** Para cada formato e cada query, há 1 execução de aquecimento (descartada) e 10 execuções medidas. O valor reportado é a **mediana**, que não é puxada por uma execução fora da curva. Mínimo e máximo estão no CSV de resultados.
+- **Medição repetida.** O script inteiro foi rodado duas vezes. As medianas variaram no máximo 22% entre as rodadas (nos tempos de poucos milissegundos, como a Q2 no particionado: 4,9 e 3,8 ms), e a ordem dos formatos foi a mesma nas duas.
+- **Respostas conferidas.** As três queries deram exatamente o mesmo resultado nos três formatos.
+- **Ambiente.** Windows 11, processador Intel com 20 núcleos lógicos, Python 3.14.7, DuckDB 2.0.0.
+- **Limitação.** Os arquivos já estavam no cache do sistema operacional depois do aquecimento, então o teste mede principalmente o processamento, não a leitura do disco.
+
+#### Resultados
+
+| Formato | Tamanho (MB) | Q1: receita por mês (ms) | Q2: receita e itens de 2017-11 (ms) | Q3: top 5 categorias (ms) |
+|---|---:|---:|---:|---:|
+| CSV | 10,30 | 74,2 | 66,9 | 79,6 |
+| Parquet | 5,47 | 6,9 | 2,4 | 13,6 |
+| Parquet particionado | 5,54 | 18,1 | 4,9 | 17,7 |
+
+Respostas das queries: em 2017-11 a receita foi de R$ 1 003 862,14, com 8 626 itens. As cinco categorias com maior receita foram `health_beauty` (R$ 1 255 695,13), `watches_gifts`, `bed_bath_table`, `sports_leisure` e `computers_accessories`. A receita por mês de todo o período está em `evidence/benchmark_output.txt`, incluindo 2016-11 com receita 0.
+
+#### Análise
+
+1. **O Parquet ocupa 53% do CSV.** O formato guarda os dados por coluna e comprimidos. O ganho não é maior por causa do `order_id`: ele sozinho ocupa 3,30 dos 5,47 MB (60%) do arquivo, porque é um código aleatório de 32 caracteres que quase não comprime.
+2. **O Parquet é de 6 a 28 vezes mais rápido que o CSV.** A cada query, o CSV precisa ser lido inteiro como texto e convertido para números e datas. O Parquet já guarda os tipos e permite ler só as colunas que a query usa: a Q2, por exemplo, lê apenas `price`, `order_status` e `year_month`. O maior ganho é na Q2 (66,9 ms → 2,4 ms), que usa menos colunas.
+3. **A partição não compensou neste volume de dados.** O Parquet particionado foi mais lento que o simples nas três queries, inclusive na Q2, que filtra pela coluna de partição. A partição funciona: o plano de execução (`EXPLAIN ANALYZE`) mostra `Scanning Files: 1/24`, ou seja, só a pasta de 2017-11 é lida. Mas listar e abrir 24 arquivos custa mais do que ler um único arquivo de 5,5 MB, que tem um só bloco (row group) de 112 650 linhas. As partições são pequenas demais (no máximo 8 665 linhas; algumas têm menos de 2 KB). Particionar compensa quando cada partição tem muito dado (centenas de MB ou mais) e o filtro evita ler a maior parte dele.
+4. **O particionado é um pouco maior que o Parquet simples** (5,54 contra 5,47 MB), porque cada um dos 24 arquivos tem o seu próprio cabeçalho e metadados.
 
 ### Tarefa 5 — Data warehouse, data lake ou lakehouse?
 

@@ -1,0 +1,57 @@
+﻿Ambiente
+  Sistema:     Windows-11-10.0.26300-SP0
+  Processador: Intel64 Family 6 Model 154 Stepping 3, GenuineIntel (20 núcleos lógicos)
+  Python:      3.14.7
+  DuckDB:      2.0.0
+  Repetições:  1 aquecimento + 10 medidas por query e formato
+
+Mesma resposta nos três formatos?
+  Query 1: sim
+  Query 2: sim
+  Query 3: sim
+
+Resposta da query 1:
+   ('2016-09', 207.86)
+   ('2016-10', 44507.3)
+   ('2016-11', 0.0)
+   ('2016-12', 10.9)
+   ('2017-01', 120098.27)
+   ('2017-02', 244959.35)
+   ('2017-03', 368341.32)
+   ('2017-04', 353842.98)
+   ('2017-05', 503159.19)
+   ('2017-06', 429916.61)
+   ('2017-07', 492287.3)
+   ('2017-08', 568245.79)
+   ('2017-09', 621415.91)
+   ('2017-10', 660179.62)
+   ('2017-11', 1003862.14)
+   ('2017-12', 742183.79)
+   ('2018-01', 945456.29)
+   ('2018-02', 837895.43)
+   ('2018-03', 981051.06)
+   ('2018-04', 993592.98)
+   ('2018-05', 992871.75)
+   ('2018-06', 863265.53)
+   ('2018-07', 878044.27)
+   ('2018-08', 848860.1)
+   ('2018-09', 145.0)
+   ('2018-10', 0.0)
+
+Resposta da query 2:
+   (1003862.14, 8626)
+
+Resposta da query 3:
+   ('health_beauty', 1255695.13)
+   ('watches_gifts', 1198185.21)
+   ('bed_bath_table', 1035964.06)
+   ('sports_leisure', 979740.92)
+   ('computers_accessories', 904322.02)
+
+Resultados (mediana de 10 execuções, em ms)
+formato                 tamanho_mb   query 1   query 2   query 3
+csv                           10.3      74.2      66.9      79.6
+parquet                       5.47       6.9       2.4      13.6
+parquet_particionado          5.54      18.1       4.9      17.7
+
+Detalhes (mediana, mínimo e máximo) gravados em evidence/benchmark_results.csv
