@@ -16,6 +16,10 @@ a mediana dos tempos, que não é puxada por uma execução fora da curva.
 Pré-requisito: ter rodado o build_model.sql e o export_parquet.sql.
 Uso (a partir da raiz do repositório):
     python src/benchmark.py > evidence/benchmark_output.txt
+
+Para guardar uma segunda rodada sem apagar a primeira, passe o nome de
+outro arquivo de resultados:
+    python src/benchmark.py evidence/benchmark_results_rodada2.csv > evidence/benchmark_output_rodada2.txt
 """
 
 import csv
@@ -29,8 +33,14 @@ import duckdb
 
 DB_PATH = "data/northmart.duckdb"
 QUERIES_FILE = "sql/benchmark_queries.sql"
-RESULTS_FILE = "evidence/benchmark_results.csv"
 REPETICOES = 10
+
+# Arquivo onde os números são gravados. Se outro caminho for passado na
+# linha de comando, ele é usado no lugar (para guardar outra rodada).
+if len(sys.argv) > 1:
+    RESULTS_FILE = sys.argv[1]
+else:
+    RESULTS_FILE = "evidence/benchmark_results.csv"
 
 # Para cada formato: como o DuckDB lê a fato e onde ela está no disco
 FORMATOS = {

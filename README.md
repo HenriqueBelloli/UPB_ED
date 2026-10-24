@@ -116,6 +116,20 @@ python src/benchmark.py > evidence/benchmark_output.txt
 
 Mede o tamanho de cada formato e o tempo das três queries de `sql/benchmark_queries.sql` em cada um, confere se as respostas são iguais nos três formatos e grava os números em `evidence/benchmark_results.csv`.
 
+Para medir de novo sem apagar a primeira rodada, passe outro arquivo de resultados:
+
+```bash
+python src/benchmark.py evidence/benchmark_results_rodada2.csv > evidence/benchmark_output_rodada2.txt
+```
+
+**6. Analisar os arquivos Parquet**
+
+```bash
+python src/run_sql.py sql/parquet_analysis.sql > evidence/parquet_analysis_output.txt
+```
+
+Lê só os metadados dos arquivos de `data/curated/` e o plano de execução da query 2: quanto cada coluna ocupa, quantos row groups o arquivo único tem, quantas linhas e quantos KB tem cada partição e quantos arquivos o filtro por mês lê. Esses números sustentam a análise da Tarefa 4.
+
 ### Tarefa 1 — Achados do profiling
 
 Script: [`sql/profiling.sql`](sql/profiling.sql) · Saída completa: [`evidence/profiling_output.txt`](evidence/profiling_output.txt)
@@ -292,7 +306,7 @@ Sellers por tier depois do tratamento: `bronze` 1 828, `silver` 919, `gold` 308 
 
 ### Tarefa 4 — Benchmark
 
-Scripts: [`sql/export_parquet.sql`](sql/export_parquet.sql), [`sql/benchmark_queries.sql`](sql/benchmark_queries.sql), [`src/benchmark.py`](src/benchmark.py) · Saída: [`evidence/benchmark_output.txt`](evidence/benchmark_output.txt), [`evidence/benchmark_results.csv`](evidence/benchmark_results.csv)
+Scripts: [`sql/export_parquet.sql`](sql/export_parquet.sql), [`sql/benchmark_queries.sql`](sql/benchmark_queries.sql), [`src/benchmark.py`](src/benchmark.py), [`sql/parquet_analysis.sql`](sql/parquet_analysis.sql) · Saída: [`evidence/benchmark_output.txt`](evidence/benchmark_output.txt) e [`evidence/benchmark_results.csv`](evidence/benchmark_results.csv) (rodada 1), [`evidence/benchmark_output_rodada2.txt`](evidence/benchmark_output_rodada2.txt) e [`evidence/benchmark_results_rodada2.csv`](evidence/benchmark_results_rodada2.csv) (rodada 2), [`evidence/parquet_analysis_output.txt`](evidence/parquet_analysis_output.txt)
 
 #### Método
 
@@ -300,7 +314,7 @@ Scripts: [`sql/export_parquet.sql`](sql/export_parquet.sql), [`sql/benchmark_que
 - **Coluna de partição: `year_month`, o mês da compra.** As análises de vendas são quase sempre por período, e a query 2 filtra um único mês. São 24 partições: os meses 2016-11 e 2018-10 não têm itens vendidos.
 - **Mesmas queries nos três formatos.** As queries leem a fato por uma view `fato`, que o `benchmark.py` recria apontando para cada formato. O texto das queries não muda; as dimensões vêm do banco DuckDB. Em todas, a receita exclui os pedidos `canceled` e `unavailable`.
 - **Repetições.** Para cada formato e cada query, há 1 execução de aquecimento (descartada) e 10 execuções medidas. O valor reportado é a **mediana**, que não é puxada por uma execução fora da curva. Mínimo e máximo estão no CSV de resultados.
-- **Medição repetida.** O script inteiro foi rodado duas vezes. As medianas variaram no máximo 22% entre as rodadas (nos tempos de poucos milissegundos, como a Q2 no particionado: 4,9 e 3,8 ms), e a ordem dos formatos foi a mesma nas duas.
+- **Medição repetida.** O script inteiro foi rodado duas vezes, e as duas rodadas estão guardadas em `evidence/`. No CSV e no Parquet simples, as medianas variaram no máximo 15% entre as rodadas. O particionado variou mais, de 20% a 106%: a Q2 deu 4,9 ms na primeira rodada e 10,1 ms na segunda. Mesmo assim, a ordem dos formatos foi a mesma nas três queries e nas duas rodadas: Parquet, depois particionado, depois CSV. A tabela abaixo mostra a rodada 1.
 - **Respostas conferidas.** As três queries deram exatamente o mesmo resultado nos três formatos.
 - **Ambiente.** Windows 11, processador Intel com 20 núcleos lógicos, Python 3.14.7, DuckDB 2.0.0.
 - **Limitação.** Os arquivos já estavam no cache do sistema operacional depois do aquecimento, então o teste mede principalmente o processamento, não a leitura do disco.
@@ -317,9 +331,9 @@ Respostas das queries: em 2017-11 a receita foi de R$ 1 003 862,14, com 8 626 it
 
 #### Análise
 
-1. **O Parquet ocupa 53% do CSV.** O formato guarda os dados por coluna e comprimidos. O ganho não é maior por causa do `order_id`: ele sozinho ocupa 3,30 dos 5,47 MB (60%) do arquivo, porque é um código aleatório de 32 caracteres que quase não comprime.
+1. **O Parquet ocupa 53% do CSV.** O formato guarda os dados por coluna e comprimidos. O ganho não é maior por causa do `order_id`: ele sozinho ocupa 3,30 dos 5,47 MB (60%) do arquivo, porque é um código aleatório de 32 caracteres que quase não comprime (tamanho por coluna em `evidence/parquet_analysis_output.txt`).
 2. **O Parquet é de 6 a 28 vezes mais rápido que o CSV.** A cada query, o CSV precisa ser lido inteiro como texto e convertido para números e datas. O Parquet já guarda os tipos e permite ler só as colunas que a query usa: a Q2, por exemplo, lê apenas `price`, `order_status` e `year_month`. O maior ganho é na Q2 (66,9 ms → 2,4 ms), que usa menos colunas.
-3. **A partição não compensou neste volume de dados.** O Parquet particionado foi mais lento que o simples nas três queries, inclusive na Q2, que filtra pela coluna de partição. A partição funciona: o plano de execução (`EXPLAIN ANALYZE`) mostra `Scanning Files: 1/24`, ou seja, só a pasta de 2017-11 é lida. Mas listar e abrir 24 arquivos custa mais do que ler um único arquivo de 5,5 MB, que tem um só bloco (row group) de 112 650 linhas. As partições são pequenas demais (no máximo 8 665 linhas; algumas têm menos de 2 KB). Particionar compensa quando cada partição tem muito dado (centenas de MB ou mais) e o filtro evita ler a maior parte dele.
+3. **A partição não compensou neste volume de dados.** O Parquet particionado foi mais lento que o simples nas três queries, inclusive na Q2, que filtra pela coluna de partição. A partição funciona: o plano de execução (`EXPLAIN`, em `evidence/parquet_analysis_output.txt`) mostra `Scanning Files: 1/24`, ou seja, só a pasta de 2017-11 é lida. Mas listar as 24 pastas (e, na Q1 e na Q3, abrir os 24 arquivos) custa mais do que ler um único arquivo de 5,5 MB, que tem um só bloco (row group) de 112 650 linhas. As partições são pequenas demais (no máximo 8 665 linhas; 3 delas têm menos de 2 KB). Particionar compensa quando cada partição tem muito dado (centenas de MB ou mais) e o filtro evita ler a maior parte dele.
 4. **O particionado é um pouco maior que o Parquet simples** (5,54 contra 5,47 MB), porque cada um dos 24 arquivos tem o seu próprio cabeçalho e metadados.
 
 ### Tarefa 5 — Data warehouse, data lake ou lakehouse?

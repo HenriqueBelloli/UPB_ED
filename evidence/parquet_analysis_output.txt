@@ -1,0 +1,128 @@
+﻿
+========== sql/parquet_analysis.sql ==========
+
+SELECT path_in_schema AS coluna,
+       round(sum(total_compressed_size) / 1024 / 1024, 2) AS mb,
+       round(100.0 * sum(total_compressed_size)
+             / (SELECT file_size_bytes FROM parquet_file_metadata('data/curated/fact_sales.parquet')), 1) AS pct_do_arquivo
+FROM parquet_metadata('data/curated/fact_sales.parquet')
+GROUP BY coluna
+ORDER BY mb DESC, coluna;
+       coluna   mb  pct_do_arquivo
+     order_id 3.30            60.4
+  total_value 0.50             9.2
+ customer_key 0.43             7.9
+  product_key 0.38             6.9
+freight_value 0.21             3.8
+        price 0.20             3.7
+   seller_key 0.17             3.2
+     date_key 0.14             2.5
+   year_month 0.07             1.2
+order_item_id 0.03             0.5
+ order_status 0.01             0.1
+
+SELECT num_rows                                AS linhas,
+       num_row_groups                          AS row_groups,
+       round(file_size_bytes / 1024 / 1024, 2) AS mb
+FROM parquet_file_metadata('data/curated/fact_sales.parquet');
+ linhas  row_groups   mb
+ 112650           1 5.47
+
+SELECT file_name                         AS arquivo,
+       num_rows                          AS linhas,
+       round(file_size_bytes / 1024, 1)  AS kb
+FROM parquet_file_metadata('data/curated/fact_sales_partitioned/*/*.parquet')
+ORDER BY arquivo;
+                                                              arquivo  linhas    kb
+data/curated/fact_sales_partitioned/year_month=2016-09/data_0.parquet       6   1.8
+data/curated/fact_sales_partitioned/year_month=2016-10/data_0.parquet     363  20.6
+data/curated/fact_sales_partitioned/year_month=2016-12/data_0.parquet       1   1.6
+data/curated/fact_sales_partitioned/year_month=2017-01/data_0.parquet     955  48.7
+data/curated/fact_sales_partitioned/year_month=2017-02/data_0.parquet    1951 102.8
+data/curated/fact_sales_partitioned/year_month=2017-03/data_0.parquet    3000 153.4
+data/curated/fact_sales_partitioned/year_month=2017-04/data_0.parquet    2684 139.6
+data/curated/fact_sales_partitioned/year_month=2017-05/data_0.parquet    4136 211.9
+data/curated/fact_sales_partitioned/year_month=2017-06/data_0.parquet    3583 184.2
+data/curated/fact_sales_partitioned/year_month=2017-07/data_0.parquet    4519 229.4
+data/curated/fact_sales_partitioned/year_month=2017-08/data_0.parquet    4910 248.9
+data/curated/fact_sales_partitioned/year_month=2017-09/data_0.parquet    4831 245.3
+data/curated/fact_sales_partitioned/year_month=2017-10/data_0.parquet    5322 261.3
+data/curated/fact_sales_partitioned/year_month=2017-11/data_0.parquet    8665 423.0
+data/curated/fact_sales_partitioned/year_month=2017-12/data_0.parquet    6308 318.0
+data/curated/fact_sales_partitioned/year_month=2018-01/data_0.parquet    8208 406.2
+data/curated/fact_sales_partitioned/year_month=2018-02/data_0.parquet    7672 377.2
+data/curated/fact_sales_partitioned/year_month=2018-03/data_0.parquet    8217 409.1
+data/curated/fact_sales_partitioned/year_month=2018-04/data_0.parquet    7975 400.0
+data/curated/fact_sales_partitioned/year_month=2018-05/data_0.parquet    7925 391.7
+data/curated/fact_sales_partitioned/year_month=2018-06/data_0.parquet    7078 354.1
+data/curated/fact_sales_partitioned/year_month=2018-07/data_0.parquet    7092 365.5
+data/curated/fact_sales_partitioned/year_month=2018-08/data_0.parquet    7248 375.9
+data/curated/fact_sales_partitioned/year_month=2018-09/data_0.parquet       1   1.5
+
+SELECT count(*)                                      AS arquivos,
+       min(num_rows)                                 AS menor_particao_linhas,
+       max(num_rows)                                 AS maior_particao_linhas,
+       count(*) FILTER (WHERE file_size_bytes < 2048) AS particoes_menores_que_2kb,
+       round(sum(file_size_bytes) / 1024 / 1024, 2)  AS mb_total
+FROM parquet_file_metadata('data/curated/fact_sales_partitioned/*/*.parquet');
+ arquivos  menor_particao_linhas  maior_particao_linhas  particoes_menores_que_2kb  mb_total
+       24                      1                   8665                          3      5.54
+
+EXPLAIN
+SELECT round(sum(price), 2) AS receita,
+       count(*)             AS itens
+FROM read_parquet('data/curated/fact_sales.parquet')
+WHERE year_month = '2017-11'
+  AND order_status NOT IN ('canceled', 'unavailable');
+╭─ Projection ───────────────────────────────────────╮
+│ Projections: receita, itens                        │
+│ ~1 row                                             │
+╰──────────────────────────┬─────────────────────────╯
+╭─ Ungrouped Aggregate ────┴─────────────────────────╮
+│ Aggregates: sum(#0), count_star()                  │
+│ ~1 row                                             │
+╰──────────────────────────┬─────────────────────────╯
+╭─ Projection ─────────────┴─────────────────────────╮
+│ Projections: price                                 │
+│ ~22,530 rows                                       │
+╰──────────────────────────┬─────────────────────────╯
+╭─ Read Parquet ───────────┴─────────────────────────╮
+│ Function: READ_PARQUET                             │
+│ Projections: price                                 │
+│ Filters:                                           │
+│ year_month = '2017-11',                            │
+│ NOT (order_status IN ('canceled', 'unavailable'))  │
+│ ~22,530 rows                                       │
+╰────────────────────────────────────────────────────╯
+
+
+EXPLAIN
+SELECT round(sum(price), 2) AS receita,
+       count(*)             AS itens
+FROM read_parquet('data/curated/fact_sales_partitioned/*/*.parquet', hive_partitioning = true)
+WHERE year_month = '2017-11'
+  AND order_status NOT IN ('canceled', 'unavailable');
+╭─ Projection ──────────────────────────────────────╮
+│ Projections: receita, itens                       │
+│ ~1 row                                            │
+╰─────────────────────────┬─────────────────────────╯
+╭─ Ungrouped Aggregate ───┴─────────────────────────╮
+│ Aggregates: sum(#0), count_star()                 │
+│ ~1 row                                            │
+╰─────────────────────────┬─────────────────────────╯
+╭─ Projection ────────────┴─────────────────────────╮
+│ Projections: price                                │
+│ ~1 row                                            │
+╰─────────────────────────┬─────────────────────────╯
+╭─ Read Parquet ──────────┴─────────────────────────╮
+│ Function: READ_PARQUET                            │
+│ Projections: price                                │
+│ Filters:                                          │
+│ NOT (order_status IN ('canceled', 'unavailable')) │
+│ File Filters: year_month = '2017-11'              │
+│ Scanning Files: 1/24                              │
+│ ~1 row                                            │
+╰───────────────────────────────────────────────────╯
+
+
+Concluído.

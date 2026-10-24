@@ -1,0 +1,10 @@
+formato,tamanho_mb,query,mediana_ms,min_ms,max_ms
+csv,10.3,1,70.5,68.9,71.8
+csv,10.3,2,66.2,65.3,67.5
+csv,10.3,3,74.6,72.9,76.5
+parquet,5.47,1,6.8,6.4,7.7
+parquet,5.47,2,2.4,2.2,2.9
+parquet,5.47,3,11.6,11.1,12.0
+parquet_particionado,5.54,1,21.8,16.8,23.7
+parquet_particionado,5.54,2,10.1,5.9,11.2
+parquet_particionado,5.54,3,22.3,17.6,26.3
