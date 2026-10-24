@@ -2,6 +2,13 @@
 
 Plataforma de dados da NorthMart construída em três etapas (PA1, PA2, PA3) para a unidade curricular de Data Engineering do IPB.
 
+## Grupo
+
+| Nome | Número |
+|---|---:|
+| Henrique Belloli Dos Santos | 69607 |
+| Maria Eduarda Soares Romana Silva | 69584 |
+
 ## Setup
 
 Requisitos: Python 3.12+ (testado com 3.14).
