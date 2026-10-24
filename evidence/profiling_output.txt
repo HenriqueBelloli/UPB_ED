@@ -1,5 +1,5 @@
 ﻿
-========== sql\profiling.sql ==========
+========== sql/profiling.sql ==========
 
 SELECT 'raw_orders' AS tabela, 'order_id' AS chave,
        count(*) AS linhas,
@@ -262,7 +262,7 @@ clientes com CEP fora da geolocalização  278
 SELECT order_status, count(*) AS pedidos
 FROM raw_orders
 GROUP BY order_status
-ORDER BY pedidos DESC;
+ORDER BY pedidos DESC, order_status;
 order_status  pedidos
    delivered    96478
      shipped     1107
@@ -347,6 +347,17 @@ ano_mes  pedidos
 2018-09       16
 2018-10        4
 
+SELECT 'dias sem nenhum pedido no período' AS verificacao,
+       count(*) AS qtd
+FROM range(
+         (SELECT CAST(min(order_purchase_timestamp) AS DATE) FROM raw_orders),
+         (SELECT CAST(max(order_purchase_timestamp) AS DATE) + 1 FROM raw_orders),
+         INTERVAL 1 DAY
+     ) AS calendario(dia)
+WHERE CAST(dia AS DATE) NOT IN (SELECT CAST(order_purchase_timestamp AS DATE) FROM raw_orders);
+                      verificacao  qtd
+dias sem nenhum pedido no período  140
+
 SELECT min(price)            AS preco_min,
        median(price)         AS preco_mediana,
        max(price)            AS preco_max,
@@ -403,7 +414,7 @@ SELECT o.order_status,
 FROM raw_order_items AS i
 JOIN raw_orders AS o ON o.order_id = i.order_id
 GROUP BY o.order_status
-ORDER BY itens DESC;
+ORDER BY itens DESC, o.order_status;
 order_status  itens     receita
    delivered 110197 13221498.11
      shipped   1185   150727.44
@@ -458,22 +469,51 @@ FROM (
 CEPs com mais de um nome de cidade   39
 
 SELECT customer_zip_code_prefix,
-       list(DISTINCT customer_city) AS cidades
+       list(DISTINCT customer_city ORDER BY customer_city) AS cidades
 FROM raw_customers
 GROUP BY customer_zip_code_prefix
 HAVING count(DISTINCT customer_city) > 1
-LIMIT 10;
-customer_zip_code_prefix                                        cidades
-                   23970                               [paraty, parati]
-                   13453 [santa barbara d'oeste, santa barbara d oeste]
-                   85575        [sao jorge d'oeste, sao jorge do oeste]
-                   06835                         [embu das artes, embu]
-                   15720           [palmeira d oeste, palmeira d'oeste]
-                   06806                         [embu das artes, embu]
-                   55485          [jurema, santo antonio das queimadas]
-                   13820              [monte alegre do sul, jaguariuna]
-                   13450 [santa barbara d'oeste, santa barbara d oeste]
-                   36576                          [porto firme, vicosa]
+ORDER BY customer_zip_code_prefix;
+customer_zip_code_prefix                                          cidades
+                   06806                           [embu, embu das artes]
+                   06810                           [embu, embu das artes]
+                   06813                           [embu, embu das artes]
+                   06814                           [embu, embu das artes]
+                   06823                           [embu, embu das artes]
+                   06824                           [embu, embu das artes]
+                   06826                           [embu, embu das artes]
+                   06835                           [embu, embu das artes]
+                   13450   [santa barbara d oeste, santa barbara d'oeste]
+                   13453   [santa barbara d oeste, santa barbara d'oeste]
+                   13454   [santa barbara d oeste, santa barbara d'oeste]
+                   13806                         [mogi mirim, mogi-mirim]
+                   13820                [jaguariuna, monte alegre do sul]
+                   13910                [jaguariuna, monte alegre do sul]
+                   15650               [estrela d oeste, estrela d'oeste]
+                   15720             [palmeira d oeste, palmeira d'oeste]
+                   23970                                 [parati, paraty]
+                   28695                 [cachoeiras de macacu, papucaia]
+                   36576                            [porto firme, vicosa]
+                   37530                         [brasopolis, brazopolis]
+                   37925                                [piumhi, piumhii]
+                   38749                          [sao benedito, silvano]
+                   42840                             [abrantes, camacari]
+                   42850                     [dias d avila, dias d'avila]
+                   45816 [arraial d ajuda, arraial d'ajuda, porto seguro]
+                   48355                                 [apora, itamira]
+                   55485            [jurema, santo antonio das queimadas]
+                   62600                               [itapage, itapaje]
+                   71065                                [brasilia, guara]
+                   71937                           [brasilia, taguatinga]
+                   71939                           [brasilia, taguatinga]
+                   72270                            [brasilia, ceilandia]
+                   73060                           [brasilia, sobradinho]
+                   73752                [planaltina, planaltina de goias]
+                   79760                           [bataipora, bataypora]
+                   85139                       [colonia vitoria, vitoria]
+                   85575          [sao jorge d'oeste, sao jorge do oeste]
+                   88380                   [balneario picarras, picarras]
+                   89294                         [campo alegre, fragosos]
 
 SELECT 'produtos sem categoria' AS verificacao,
        count(*) FILTER (WHERE product_category_name IS NULL) AS qtd
@@ -495,7 +535,8 @@ SELECT product_category_name, count(*) AS produtos
 FROM raw_products
 WHERE product_category_name IS NOT NULL
   AND product_category_name NOT IN (SELECT product_category_name FROM raw_category_translation)
-GROUP BY product_category_name;
+GROUP BY product_category_name
+ORDER BY product_category_name;
                         product_category_name  produtos
                                      pc_gamer         3
 portateis_cozinha_e_preparadores_de_alimentos        10
@@ -510,21 +551,23 @@ SELECT CASE
 FROM raw_order_items AS i
 JOIN raw_products AS p ON p.product_id = i.product_id
 LEFT JOIN raw_category_translation AS t ON t.product_category_name = p.product_category_name
-GROUP BY situacao;
+GROUP BY situacao
+ORDER BY situacao;
               situacao  itens     receita
-         sem categoria   1603   179535.28
 categoria sem tradução     24     5514.48
                     ok 111023 13406593.94
+         sem categoria   1603   179535.28
 
 SELECT product_category_name
 FROM raw_category_translation
 WHERE product_category_name LIKE '%\_2' ESCAPE '\'
-   OR product_category_name IN ('casa_conforto', 'eletrodomesticos');
+   OR product_category_name IN ('casa_conforto', 'eletrodomesticos')
+ORDER BY product_category_name;
 product_category_name
-     eletrodomesticos
         casa_conforto
-   eletrodomesticos_2
       casa_conforto_2
+     eletrodomesticos
+   eletrodomesticos_2
 
 SELECT seller_city, seller_state, count(*) AS sellers
 FROM raw_sellers
@@ -536,7 +579,7 @@ WHERE seller_city LIKE '%/%'
    OR regexp_matches(seller_city, '[0-9]')
    OR seller_city <> strip_accents(seller_city)
 GROUP BY seller_city, seller_state
-ORDER BY seller_city;
+ORDER BY seller_city, seller_state;
                              seller_city seller_state  sellers
                                 04482255           RJ        1
                             auriflama/sp           SP        1
@@ -569,21 +612,21 @@ FROM raw_sellers
 WHERE strip_accents(seller_city) LIKE '%sao%paulo%'
    OR seller_city = 'sp / sp'
 GROUP BY seller_city
-ORDER BY sellers DESC;
+ORDER BY sellers DESC, seller_city;
                seller_city  sellers
                  sao paulo      694
             sao paulo - sp        3
    carapicuiba / sao paulo        1
+       jacarei / sao paulo        1
             maua/sao paulo        1
 ribeirao preto / sao paulo        1
      santo andre/sao paulo        1
+                sao  paulo        1
      sao paulo / sao paulo        1
               sao paulo sp        1
-                   sp / sp        1
-       jacarei / sao paulo        1
-                sao  paulo        1
-                são paulo        1
                 sao paulop        1
+                são paulo        1
+                   sp / sp        1
 
 SELECT count(*) AS sellers_repetidos,
        sum(versoes) AS registros_envolvidos,
@@ -620,7 +663,7 @@ LIMIT 6;
 SELECT '"' || profile.tier || '"' AS tier_original, count(*) AS perfis
 FROM raw_seller_profiles
 GROUP BY tier_original
-ORDER BY perfis DESC;
+ORDER BY perfis DESC, tier_original;
 tier_original  perfis
      "bronze"    1828
      "silver"     906
@@ -695,7 +738,7 @@ WHERE s.seller_id NOT IN (SELECT seller_id FROM raw_seller_profiles);
 SELECT payment_type, count(*) AS pagamentos, round(sum(payment_value), 2) AS valor
 FROM raw_payments
 GROUP BY payment_type
-ORDER BY pagamentos DESC;
+ORDER BY pagamentos DESC, payment_type;
 payment_type  pagamentos       valor
  credit_card       76795 12542084.19
       boleto       19784  2869361.27
@@ -782,5 +825,14 @@ FROM (
              cidades escritas com acento  73437
                CEPs em mais de um estado      8
 maior número de linhas para um mesmo CEP   1146
+
+SELECT geolocation_city, count(*) AS linhas
+FROM raw_geolocation
+WHERE geolocation_city IN ('sao paulo', 'são paulo')
+GROUP BY geolocation_city
+ORDER BY geolocation_city;
+geolocation_city  linhas
+       sao paulo  135800
+       são paulo   24918
 
 Concluído.

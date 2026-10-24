@@ -19,7 +19,9 @@
 --   * count(*) FILTER (WHERE ...) conta só as linhas que atendem à
 --     condição;
 --   * NOT IN (SELECT ...) encontra valores que não existem na outra
---     tabela, ou seja, registros órfãos.
+--     tabela, ou seja, registros órfãos;
+--   * as queries que listam linhas têm ORDER BY com desempate, para
+--     que a saída seja a mesma a cada execução.
 -- =====================================================================
 
 
@@ -236,7 +238,7 @@ FROM raw_sellers WHERE seller_zip_code_prefix NOT IN (SELECT geolocation_zip_cod
 SELECT order_status, count(*) AS pedidos
 FROM raw_orders
 GROUP BY order_status
-ORDER BY pedidos DESC;
+ORDER BY pedidos DESC, order_status;
 
 -- Datas fora de ordem ou que faltam para o status do pedido.
 -- A ordem esperada é: compra -> aprovação -> transportadora -> cliente.
@@ -279,6 +281,18 @@ SELECT strftime(order_purchase_timestamp, '%Y-%m') AS ano_mes,
 FROM raw_orders
 GROUP BY ano_mes
 ORDER BY ano_mes;
+
+-- Dias sem nenhum pedido entre a primeira e a última compra.
+-- range() gera todos os dias do período (o fim não entra, por isso o
+-- + 1); o NOT IN deixa só os dias em que ninguém comprou.
+SELECT 'dias sem nenhum pedido no período' AS verificacao,
+       count(*) AS qtd
+FROM range(
+         (SELECT CAST(min(order_purchase_timestamp) AS DATE) FROM raw_orders),
+         (SELECT CAST(max(order_purchase_timestamp) AS DATE) + 1 FROM raw_orders),
+         INTERVAL 1 DAY
+     ) AS calendario(dia)
+WHERE CAST(dia AS DATE) NOT IN (SELECT CAST(order_purchase_timestamp AS DATE) FROM raw_orders);
 
 
 -- =====================================================================
@@ -334,7 +348,7 @@ SELECT o.order_status,
 FROM raw_order_items AS i
 JOIN raw_orders AS o ON o.order_id = i.order_id
 GROUP BY o.order_status
-ORDER BY itens DESC;
+ORDER BY itens DESC, o.order_status;
 
 
 -- =====================================================================
@@ -373,13 +387,15 @@ FROM (
     HAVING count(DISTINCT customer_city) > 1
 );
 
--- Exemplos de CEP com mais de um nome de cidade
+-- Todos os CEPs com mais de um nome de cidade (são poucos, então a
+-- lista sai inteira). O ORDER BY dentro do list() deixa as cidades em
+-- ordem alfabética.
 SELECT customer_zip_code_prefix,
-       list(DISTINCT customer_city) AS cidades
+       list(DISTINCT customer_city ORDER BY customer_city) AS cidades
 FROM raw_customers
 GROUP BY customer_zip_code_prefix
 HAVING count(DISTINCT customer_city) > 1
-LIMIT 10;
+ORDER BY customer_zip_code_prefix;
 
 
 -- =====================================================================
@@ -403,7 +419,8 @@ SELECT product_category_name, count(*) AS produtos
 FROM raw_products
 WHERE product_category_name IS NOT NULL
   AND product_category_name NOT IN (SELECT product_category_name FROM raw_category_translation)
-GROUP BY product_category_name;
+GROUP BY product_category_name
+ORDER BY product_category_name;
 
 -- Impacto nas vendas: itens e receita sem categoria ou sem tradução
 SELECT CASE
@@ -416,13 +433,15 @@ SELECT CASE
 FROM raw_order_items AS i
 JOIN raw_products AS p ON p.product_id = i.product_id
 LEFT JOIN raw_category_translation AS t ON t.product_category_name = p.product_category_name
-GROUP BY situacao;
+GROUP BY situacao
+ORDER BY situacao;
 
 -- Categorias quase repetidas (mesmo nome com sufixo _2)
 SELECT product_category_name
 FROM raw_category_translation
 WHERE product_category_name LIKE '%\_2' ESCAPE '\'
-   OR product_category_name IN ('casa_conforto', 'eletrodomesticos');
+   OR product_category_name IN ('casa_conforto', 'eletrodomesticos')
+ORDER BY product_category_name;
 
 
 -- =====================================================================
@@ -441,7 +460,7 @@ WHERE seller_city LIKE '%/%'
    OR regexp_matches(seller_city, '[0-9]')
    OR seller_city <> strip_accents(seller_city)
 GROUP BY seller_city, seller_state
-ORDER BY seller_city;
+ORDER BY seller_city, seller_state;
 
 -- Exemplo: as várias grafias de "sao paulo"
 SELECT seller_city, count(*) AS sellers
@@ -449,7 +468,7 @@ FROM raw_sellers
 WHERE strip_accents(seller_city) LIKE '%sao%paulo%'
    OR seller_city = 'sp / sp'
 GROUP BY seller_city
-ORDER BY sellers DESC;
+ORDER BY sellers DESC, seller_city;
 
 
 -- =====================================================================
@@ -486,7 +505,7 @@ LIMIT 6;
 SELECT '"' || profile.tier || '"' AS tier_original, count(*) AS perfis
 FROM raw_seller_profiles
 GROUP BY tier_original
-ORDER BY perfis DESC;
+ORDER BY perfis DESC, tier_original;
 
 -- 9.3 Distribuição de handling_days (dias para despachar)
 SELECT shipping.handling_days AS handling_days, count(*) AS perfis
@@ -536,7 +555,7 @@ WHERE s.seller_id NOT IN (SELECT seller_id FROM raw_seller_profiles);
 SELECT payment_type, count(*) AS pagamentos, round(sum(payment_value), 2) AS valor
 FROM raw_payments
 GROUP BY payment_type
-ORDER BY pagamentos DESC;
+ORDER BY pagamentos DESC, payment_type;
 
 SELECT 'pagamentos com valor zero' AS verificacao,
        count(*) FILTER (WHERE payment_value = 0) AS qtd
@@ -606,3 +625,10 @@ FROM (
     FROM raw_geolocation
     GROUP BY geolocation_zip_code_prefix
 );
+
+-- Exemplo: a mesma cidade escrita com e sem acento
+SELECT geolocation_city, count(*) AS linhas
+FROM raw_geolocation
+WHERE geolocation_city IN ('sao paulo', 'são paulo')
+GROUP BY geolocation_city
+ORDER BY geolocation_city;
