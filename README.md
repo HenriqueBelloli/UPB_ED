@@ -338,11 +338,11 @@ Respostas das queries: em 2017-11 a receita foi de R$ 1 003 862,14, com 8 626 it
 
 ### Tarefa 5 — Data warehouse, data lake ou lakehouse?
 
-Para a NorthMart, escolheríamos um Lakehouse. Como num Data Lake, os ficheiros CSV e JSON são preservados sem alterações na camada raw; como num Data Warehouse, os dados tratados ficam organizados num modelo dimensional, com verificações de qualidade, e guardados em Parquet, um formato aberto.
+Para a NorthMart, escolheríamos um Lakehouse. Como num Data Lake, os arquivos CSV e JSON são preservados sem alterações na camada raw; como num Data Warehouse, os dados tratados ficam organizados num modelo dimensional, com verificações de qualidade, e guardados em Parquet, um formato aberto.
 
-As nossas medições justificam a escolha. O Parquet ocupou 5,47 MB, contra 10,30 MB do CSV. A consulta de receita mensal, feita pelo DuckDB diretamente sobre o ficheiro, demorou 6,9 ms em Parquet, contra 74,2 ms em CSV: desempenho de Data Warehouse sem copiar os dados para um sistema separado. Um Data Lake sozinho não resolveria o problema dos analistas, que juntam os ficheiros de formas diferentes.
+Nossas medições justificam a escolha. O Parquet ocupou 5,47 MB, contra 10,30 MB do CSV. A consulta de receita mensal, feita pelo DuckDB diretamente sobre o arquivo, demorou 6,9 ms em Parquet, contra 74,2 ms em CSV: desempenho de Data Warehouse sem copiar os dados para um sistema separado. Um Data Lake sozinho não resolveria o problema dos analistas, que juntam os arquivos de formas diferentes.
 
-O particionamento ficaria para mais tarde: com este volume, o Parquet particionado foi mais lento (18,1 ms), porque abrir 24 ficheiros pequenos custa mais do que ler um só.
+O particionamento ficaria para mais tarde: com este volume, o Parquet particionado foi mais lento (18,1 ms), porque abrir 24 arquivos pequenos custa mais do que ler um só.
 
 ---
 
