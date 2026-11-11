@@ -8,14 +8,19 @@ de execução de cada EXPLAIN.
 Uso (a partir da raiz do repositório):
     python src/run_sql.py sql/load_raw.sql
     python src/run_sql.py sql/load_raw.sql sql/build_model.sql
+
+Para usar outro banco (ex.: o da PA2), defina a variável NORTHMART_DB:
+    NORTHMART_DB=data/northmart_pa2.duckdb python src/run_sql.py ...
 """
 
+import os
 import sys
 
 import duckdb
 
-# Caminho do banco. Se o arquivo não existir, o DuckDB cria.
-DB_PATH = "data/northmart.duckdb"
+# Caminho do banco: o da variável NORTHMART_DB, se ela existir; senão,
+# o banco da PA1. Se o arquivo não existir, o DuckDB cria.
+DB_PATH = os.environ.get("NORTHMART_DB", "data/northmart.duckdb")
 
 # Força a saída em UTF-8. Sem isso, no Windows, salvar a saída num
 # arquivo (com ">") quebra ao encontrar alguns acentos dos dados.
