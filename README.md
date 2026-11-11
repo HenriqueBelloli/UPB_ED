@@ -355,7 +355,98 @@ O particionamento ficaria para mais tarde: com este volume, o Parquet particiona
 
 ## PA2 — Pipeline ELT orquestrado e testado
 
-_A preencher._
+Um pipeline diário extrai os pedidos de uma API REST, grava as respostas numa camada raw, transforma com dbt e roda no Airflow. Os testes do dbt ficam entre o staging e os marts: se falharem, a `fact_sales` não é alterada.
+
+```
+API (mock_api.py) → extract → data/raw/<data>/ → load → raw_api_orders → dbt staging → dbt test → dbt marts (fact_sales)
+```
+
+### Preparar o ambiente (Ubuntu no WSL)
+
+O Airflow não roda nativamente no Windows, por isso a PA2 roda no Ubuntu do WSL. O repositório continua em `C:` e é acessado por `/mnt/c/...`. Os passos abaixo são feitos uma única vez.
+
+**1. Python 3.12 e pacotes.** O `requirements.txt` exige Python 3.12; o Ubuntu 26.04 só traz o 3.14, então o 3.12 vem pelo `uv`:
+
+```bash
+sudo apt update && sudo apt install -y pipx
+pipx install uv && pipx ensurepath        # depois, fechar e abrir o terminal
+uv python install 3.12
+uv venv --python 3.12 ~/venvs/northmart
+source ~/venvs/northmart/bin/activate
+cd /mnt/c/Desenvolvimento/ED/PA            # ajuste para a pasta do seu repositório
+uv pip install -r requirements.txt
+```
+
+**2. Arquivos de origem** (não versionados), em `data/source/`:
+- os 9 CSV da Olist e o `northmart_seller_profiles.json`, os mesmos da PA1;
+- o `northmart_api_feed.parquet`, do virtual.ipb.pt, que é lido pela API.
+
+**3. Banco da PA2.** O enunciado pede um banco novo, construído com o build da PA1 e com a fato esvaziada:
+
+```bash
+source pa2_env.sh
+python src/run_sql.py sql/load_raw.sql sql/build_model.sql sql/pa2_reset_fact.sql
+```
+
+Isso cria o `data/northmart_pa2.duckdb` com as 4 dimensões cheias e a `fact_sales` vazia.
+
+### Uso do dia a dia
+
+Em cada terminal novo do Ubuntu, a partir da raiz do repositório:
+
+```bash
+source pa2_env.sh
+```
+
+O `pa2_env.sh` ativa o Python 3.12 e define as variáveis:
+
+| Variável | Para quê |
+|---|---|
+| `NORTHMART_DB` | Caminho do banco da PA2, usado pelos scripts e pelo dbt |
+| `AIRFLOW_HOME` | Pasta interna do Airflow, em `~/airflow` |
+| `AIRFLOW__CORE__DAGS_FOLDER` | Pasta das DAGs, `airflow/dags/` do repositório |
+
+**Ligar a API**, num terminal só para ela:
+
+```bash
+uvicorn mock_api:app --port 8000
+```
+
+**Extrair e carregar um dia** (é o que as tarefas `extract` e `load` da DAG fazem):
+
+```bash
+python src/extract_orders.py 2018-05-03     # API → data/raw/2018-05-03/page_*.json
+python src/load_raw_api.py 2018-05-03       # data/raw/2018-05-03/ → raw_api_orders
+```
+
+**Os 14 dias de uma vez:**
+
+```bash
+for d in $(seq -w 1 14); do
+    python src/extract_orders.py 2018-05-$d && python src/load_raw_api.py 2018-05-$d
+done
+```
+
+Os dois scripts podem ser repetidos à vontade: a mesma data é substituída, nunca duplicada. Os 14 dias somam 4 471 itens.
+
+### Tarefa 1 — Extração
+
+Script: [`src/extract_orders.py`](src/extract_orders.py) e carga em [`src/load_raw_api.py`](src/load_raw_api.py).
+
+- **Paginação:** pede a página 1, lê o `total_pages` e pede as demais. Confere se cada resposta veio com a data e a página pedidas.
+- **Retry:** 503, outros 5xx, timeout e falha de conexão são temporários, então tenta de novo até 5 vezes, esperando 1, 2, 3 e 4 s. Um 4xx (ex.: data inválida) é erro do pedido e falha na hora.
+- **Camada raw sem alterações:** cada resposta é gravada byte a byte em `data/raw/<data>/page_NNN.json`. A gravação passa por uma pasta temporária, então uma falha no meio não deixa a data pela metade.
+- **Carga:** `raw_api_orders` recebe uma linha por item, com **todas as colunas como texto**, mais `_run_date`, `_source_file` e `_loaded_at`. A data é apagada e inserida de novo numa transação. Um valor malformado não derruba a carga; quem o acusa são os testes do dbt.
+
+### Contrato entre a carga e o dbt
+
+| Item | Valor |
+|---|---|
+| Tabela de entrada do dbt | `raw_api_orders`: `order_id`, `order_item_id`, `customer_id`, `product_id`, `seller_id`, `order_status`, `order_purchase_timestamp`, `price`, `freight_value` (todas VARCHAR), `_run_date` (DATE), `_source_file`, `_loaded_at` |
+| Dimensões | `dim_date`, `dim_customer`, `dim_product`, `dim_seller`, como o `build_model.sql` da PA1 as construiu |
+| Dia a processar | variável dbt `run_date`, ex.: `--vars '{run_date: 2018-05-03}'` |
+| Banco | `profiles.yml` com `path: "{{ env_var('NORTHMART_DB') }}"` |
+| Comandos chamados pela DAG | `dbt run --select staging`, `dbt test --select staging`, `dbt run --select marts` |
 
 ---
 
