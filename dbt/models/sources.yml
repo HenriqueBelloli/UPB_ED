@@ -1,0 +1,11 @@
+version: 2
+
+sources:
+  - name: northmart
+    schema: main
+    tables:
+      - name: raw_api_orders
+      - name: dim_date
+      - name: dim_customer
+      - name: dim_product
+      - name: dim_seller
