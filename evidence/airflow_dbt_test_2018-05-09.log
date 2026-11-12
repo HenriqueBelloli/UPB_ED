@@ -1,0 +1,77 @@
+::group::Pre Execute
+DAG bundles loaded: dags-folder
+Filling up the DagBag from /mnt/c/Desenvolvimento/ED/PA/airflow/dags/northmart_daily.py
+Worker startup parse complete
+::endgroup::
+Tmp dir root location: /tmp
+Running command: ['/usr/bin/bash', '-c', "cd /mnt/c/Desenvolvimento/ED/PA/dbt && /home/ubuntu/venvs/northmart/bin/dbt test --select staging --vars '{run_date: 2018-05-09}' --profiles-dir ."]
+Output:
+20:18:50  Running with dbt=1.12.6
+20:18:50  Registered adapter: duckdb=1.11.1
+20:18:51  Found 2 models, 19 data tests, 5 sources, 512 macros
+20:18:51
+20:18:51  Concurrency: 1 threads (target='dev')
+20:18:51
+20:18:51  1 of 19 START test accepted_range_stg_api_orders_freight_value__True__0 ........ [RUN]
+20:18:51  1 of 19 PASS accepted_range_stg_api_orders_freight_value__True__0 .............. [PASS in 0.06s]
+20:18:51  2 of 19 START test accepted_range_stg_api_orders_price__False__0 ............... [RUN]
+20:18:51  2 of 19 FAIL 15 accepted_range_stg_api_orders_price__False__0 .................. [FAIL 15 in 0.03s]
+20:18:51  3 of 19 START test accepted_values_stg_api_orders_order_status__delivered__shipped__canceled__unavailable__invoiced__processing__created__approved  [RUN]
+20:18:51  3 of 19 PASS accepted_values_stg_api_orders_order_status__delivered__shipped__canceled__unavailable__invoiced__processing__created__approved  [PASS in 0.05s]
+20:18:51  4 of 19 START test assert_order_date_matches_run_date .......................... [RUN]
+20:18:51  4 of 19 PASS assert_order_date_matches_run_date ................................ [PASS in 0.03s]
+20:18:51  5 of 19 START test assert_seller_not_before_joined_on .......................... [RUN]
+20:18:51  5 of 19 PASS assert_seller_not_before_joined_on ................................ [PASS in 0.03s]
+20:18:51  6 of 19 START test not_null_stg_api_orders_customer_id ......................... [RUN]
+20:18:51  6 of 19 FAIL 10 not_null_stg_api_orders_customer_id ............................ [FAIL 10 in 0.04s]
+20:18:51  7 of 19 START test not_null_stg_api_orders_freight_value ....................... [RUN]
+20:18:51  7 of 19 PASS not_null_stg_api_orders_freight_value ............................. [PASS in 0.04s]
+20:18:51  8 of 19 START test not_null_stg_api_orders_order_id ............................ [RUN]
+20:18:51  8 of 19 PASS not_null_stg_api_orders_order_id .................................. [PASS in 0.03s]
+20:18:51  9 of 19 START test not_null_stg_api_orders_order_item_id ....................... [RUN]
+20:18:51  9 of 19 PASS not_null_stg_api_orders_order_item_id ............................. [PASS in 0.03s]
+20:18:51  10 of 19 START test not_null_stg_api_orders_order_item_key ..................... [RUN]
+20:18:51  10 of 19 PASS not_null_stg_api_orders_order_item_key ........................... [PASS in 0.03s]
+20:18:51  11 of 19 START test not_null_stg_api_orders_order_purchase_timestamp ........... [RUN]
+20:18:51  11 of 19 PASS not_null_stg_api_orders_order_purchase_timestamp ................. [PASS in 0.03s]
+20:18:51  12 of 19 START test not_null_stg_api_orders_order_status ....................... [RUN]
+20:18:51  12 of 19 PASS not_null_stg_api_orders_order_status ............................. [PASS in 0.03s]
+20:18:51  13 of 19 START test not_null_stg_api_orders_price .............................. [RUN]
+20:18:51  13 of 19 PASS not_null_stg_api_orders_price .................................... [PASS in 0.03s]
+20:18:51  14 of 19 START test not_null_stg_api_orders_product_id ......................... [RUN]
+20:18:51  14 of 19 PASS not_null_stg_api_orders_product_id ............................... [PASS in 0.03s]
+20:18:51  15 of 19 START test not_null_stg_api_orders_seller_id .......................... [RUN]
+20:18:51  15 of 19 PASS not_null_stg_api_orders_seller_id ................................ [PASS in 0.04s]
+20:18:51  16 of 19 START test relationships_stg_api_orders_customer_id__customer_id___source_northmart_dim_customer_  [RUN]
+20:18:51  16 of 19 PASS relationships_stg_api_orders_customer_id__customer_id___source_northmart_dim_customer_  [PASS in 0.06s]
+20:18:51  17 of 19 START test relationships_stg_api_orders_product_id__product_id___source_northmart_dim_product_  [RUN]
+20:18:52  17 of 19 PASS relationships_stg_api_orders_product_id__product_id___source_northmart_dim_product_  [PASS in 0.06s]
+20:18:52  18 of 19 START test relationships_stg_api_orders_seller_id__seller_id___source_northmart_dim_seller_  [RUN]
+20:18:52  18 of 19 PASS relationships_stg_api_orders_seller_id__seller_id___source_northmart_dim_seller_  [PASS in 0.05s]
+20:18:52  19 of 19 START test unique_stg_api_orders_order_item_key ....................... [RUN]
+20:18:52  19 of 19 FAIL 20 unique_stg_api_orders_order_item_key .......................... [FAIL 20 in 0.04s]
+20:18:52
+20:18:52  Finished running 19 data tests in 0 hours 0 minutes and 0.94 seconds (0.94s).
+20:18:52
+20:18:52  Completed with 3 errors, 0 partial successes, and 0 warnings:
+20:18:52
+20:18:52  [ERROR]: in test accepted_range_stg_api_orders_price__False__0 (models/staging/schema.yml)
+20:18:52    Got 15 results, configured to fail if != 0
+20:18:52
+20:18:52    compiled code at target/compiled/northmart/models/staging/schema.yml/accepted_range_stg_api_orders_price__False__0.sql
+20:18:52
+20:18:52  [ERROR]: in test not_null_stg_api_orders_customer_id (models/staging/schema.yml)
+20:18:52    Got 10 results, configured to fail if != 0
+20:18:52
+20:18:52    compiled code at target/compiled/northmart/models/staging/schema.yml/not_null_stg_api_orders_customer_id.sql
+20:18:52
+20:18:52  [ERROR]: in test unique_stg_api_orders_order_item_key (models/staging/schema.yml)
+20:18:52    Got 20 results, configured to fail if != 0
+20:18:52
+20:18:52    compiled code at target/compiled/northmart/models/staging/schema.yml/unique_stg_api_orders_order_item_key.sql
+20:18:52
+20:18:52  Done. PASS=16 WARN=0 ERROR=3 SKIP=0 NO-OP=0 REUSED=0 TOTAL=19
+Command exited with return code 1
+Task failed with exception
+::group::Post Execute
+::endgroup::

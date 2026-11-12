@@ -1,0 +1,38 @@
+Prova de idempotência: o dia 2018-05-03 foi rodado de novo pelo Airflow
+(airflow tasks clear northmart_daily -s 2018-05-03 -e 2018-05-03 -y), entre as duas contagens.
+
+=== Contagem da fact_sales antes (2026-11-12 20:20:52)
+Linhas na fato: 4059
+Itens duplicados: 0
+Linhas por dia:
+  20180501: 277
+  20180502: 339
+  20180503: 357
+  20180504: 309
+  20180505: 221
+  20180506: 240
+  20180507: 421
+  20180508: 378
+  20180510: 335
+  20180511: 284
+  20180512: 239
+  20180513: 246
+  20180514: 413
+
+=== Contagem da fact_sales depois (2026-11-12 20:21:14)
+Linhas na fato: 4059
+Itens duplicados: 0
+Linhas por dia:
+  20180501: 277
+  20180502: 339
+  20180503: 357
+  20180504: 309
+  20180505: 221
+  20180506: 240
+  20180507: 421
+  20180508: 378
+  20180510: 335
+  20180511: 284
+  20180512: 239
+  20180513: 246
+  20180514: 413

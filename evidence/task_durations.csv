@@ -1,0 +1,6 @@
+tarefa,execucoes,media_s,min_s,max_s
+dbt_staging,14,4.06,3.9,4.35
+dbt_test,13,3.61,3.39,3.95
+dbt_marts,13,3.06,2.92,3.32
+extract,14,0.59,0.18,3.58
+load,14,0.28,0.23,0.37
