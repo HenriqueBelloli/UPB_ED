@@ -429,6 +429,34 @@ done
 
 Os dois scripts podem ser repetidos à vontade: a mesma data é substituída, nunca duplicada. Os 14 dias somam 4 471 itens.
 
+### Rodar o pipeline no Airflow
+
+Com a API ligada, num terminal só para o Airflow:
+
+```bash
+airflow standalone
+```
+
+A interface abre em `http://localhost:8080`. O usuário é `admin`, e a senha é gerada na primeira execução e gravada em `~/airflow/simple_auth_manager_passwords.json.generated`.
+
+Noutro terminal (com `source pa2_env.sh`):
+
+```bash
+# Os 14 dias (backfill). A DAG precisa estar despausada para os runs andarem.
+airflow backfill create --dag-id northmart_daily --from-date 2018-05-01 --to-date 2018-05-14
+airflow dags unpause northmart_daily
+
+# Rodar de novo um dia já processado (prova de idempotência)
+python tests/check_idempotency.py antes
+airflow tasks clear northmart_daily -s 2018-05-03 -e 2018-05-03 -y
+python tests/check_idempotency.py depois
+
+# Duração de cada tarefa (Tarefa 6)
+python src/task_durations.py
+```
+
+Para recomeçar do zero, basta rodar de novo o passo 3 de "Preparar o ambiente" e apagar o histórico da DAG com `airflow dags delete northmart_daily -y`.
+
 ### Tarefa 1 — Extração
 
 Script: [`src/extract_orders.py`](src/extract_orders.py) e carga em [`src/load_raw_api.py`](src/load_raw_api.py).
@@ -447,6 +475,83 @@ Script: [`src/extract_orders.py`](src/extract_orders.py) e carga em [`src/load_r
 | Dia a processar | variável dbt `run_date`, ex.: `--vars '{run_date: 2018-05-03}'` |
 | Banco | `profiles.yml` com `path: "{{ env_var('NORTHMART_DB') }}"` |
 | Comandos chamados pela DAG | `dbt run --select staging`, `dbt test --select staging`, `dbt run --select marts` |
+
+### Tarefa 2 — Transformação com dbt
+
+Projeto: [`dbt/`](dbt/) (adaptador dbt-duckdb, banco pelo `NORTHMART_DB`).
+
+- **Fontes** ([`models/sources.yml`](dbt/models/sources.yml)): a `raw_api_orders` e as 4 dimensões da PA1. As dimensões não são recriadas: a API não traz clientes, produtos nem sellers novos.
+- **Staging** ([`stg_api_orders`](dbt/models/staging/stg_api_orders.sql), uma view):
+  - processa só o lote do dia (`_run_date = run_date`), para que um dia ruim não contamine os testes dos outros;
+  - converte os tipos com `try_cast`: um valor inválido vira nulo e o teste acusa, em vez de quebrar;
+  - tira espaços dos ids, normaliza o `order_status` e cria a chave `order_item_key = order_id-order_item_id`;
+  - **não apaga nem deduplica linhas**, senão o defeito some antes de chegar aos testes.
+- **Mart** ([`fact_sales`](dbt/models/marts/fact_sales.sql)):
+  - incremental com `delete+insert` e chave única `order_id + order_item_id`. Rodar o mesmo dia de novo apaga e reinsere o lote, sem duplicar;
+  - mesmas colunas da fato da PA1, com as surrogate keys buscadas nas dimensões por LEFT JOIN e a `date_key` derivada da data da compra.
+
+Depois do backfill, a `fact_sales` tem 4 059 linhas de 13 dias. Elas são **idênticas** às mesmas linhas da fato da PA1, sem nenhuma chave nula.
+
+### Tarefa 3 — Testes de qualidade
+
+São 19 testes sobre o `stg_api_orders`, em [`models/staging/schema.yml`](dbt/models/staging/schema.yml) e [`tests/`](dbt/tests/):
+
+| Exigido | Testes |
+|---|---|
+| Unicidade | `unique` em `order_item_key` |
+| Not null | `not_null` nos ids, na data da compra, no status, no `price` e no `freight_value` |
+| Integridade referencial | `relationships` de `customer_id`, `product_id` e `seller_id` com as dimensões da PA1 |
+| Faixa aceita | teste genérico próprio [`accepted_range`](dbt/tests/generic/accepted_range.sql): `price > 0` e `freight_value >= 0` |
+| Domínio | `accepted_values` no `order_status` |
+| Contrato da API | [`assert_order_date_matches_run_date`](dbt/tests/assert_order_date_matches_run_date.sql): a data da compra é o dia pedido à API |
+| **Regra de negócio própria** | [`assert_seller_not_before_joined_on`](dbt/tests/assert_seller_not_before_joined_on.sql): **um seller não pode vender antes da data em que entrou na NorthMart** (`joined_on`, que veio do JSON de perfis na PA1). A regra não é sobre o formato dos dados: um item pode ter todos os campos válidos e ainda assim ser impossível para o negócio |
+
+Saídas: [`evidence/dbt_test_clean.txt`](evidence/dbt_test_clean.txt) (dia limpo, 19 PASS) e [`evidence/dbt_test_corrupted.txt`](evidence/dbt_test_corrupted.txt) (dia corrompido, 3 FAIL).
+
+### Tarefa 4 — Orquestração
+
+DAG: [`airflow/dags/northmart_daily.py`](airflow/dags/northmart_daily.py).
+
+```
+extract → load → dbt_staging → dbt_test → dbt_marts
+```
+
+- **`extract` e `load`** são tarefas Python que chamam `src/extract_orders.py` e `src/load_raw_api.py` com a data da execução (`{{ ds }}`).
+- **As três tarefas do dbt** recebem a mesma data como `run_date`.
+- **O `dbt_test` é o portão:** se algum teste falha, a tarefa falha, o `dbt_marts` fica `upstream_failed` e a `fact_sales` não é alterada. Ele não tem nova tentativa, porque os mesmos dados dariam o mesmo resultado.
+- **Agendamento:** diário (`@daily`), de 2018-05-01 a 2018-05-14.
+- **Um dia de cada vez** (`max_active_runs=1` e `max_active_tasks=1`), porque o DuckDB aceita um escritor por vez.
+- **Backfill:** os 14 dias rodaram com `airflow backfill create`. **13 dias terminaram com sucesso e 2018-05-09 falhou no `dbt_test`** ([print da grid](evidence/airflow_grid_backfill.png)).
+- **Idempotência:** o dia 2018-05-03 foi rodado de novo pelo Airflow. A fato tinha 4 059 linhas antes e continuou com 4 059 depois, com zero itens duplicados e as mesmas contagens por dia ([`evidence/idempotency.txt`](evidence/idempotency.txt)). Isso vale para as três camadas: o `extract` troca a pasta da data, o `load` apaga e reinsere a data e o `dbt_marts` faz `delete+insert` pela chave do item.
+
+![Grid do Airflow depois do backfill](evidence/airflow_grid_backfill.png)
+
+### Tarefa 5 — Incidente
+
+**O dia corrompido é 2018-05-09.** No backfill, as tarefas `extract`, `load` e `dbt_staging` terminaram com sucesso. O `dbt_test` falhou com 3 testes, e o `dbt_marts` não rodou (`upstream_failed`). A `fact_sales` terminou com 0 linhas desse dia: os marts não foram atualizados.
+
+| Teste que falhou | Linhas | Defeito |
+|---|---:|---|
+| `accepted_range` do `price` | 15 | preços negativos (ex.: -199,0 e -89,9) |
+| `not_null` do `customer_id` | 10 | itens sem cliente |
+| `unique` do `order_item_key` | 20 | itens repetidos no mesmo lote (40 linhas para 20 chaves) |
+
+Saídas: [`evidence/airflow_dbt_test_2018-05-09.log`](evidence/airflow_dbt_test_2018-05-09.log) (log da tarefa no Airflow) e [`evidence/dbt_test_corrupted.txt`](evidence/dbt_test_corrupted.txt).
+
+**Os testes pegaram todos os defeitos.** Comparamos item a item os 412 itens do dia 09 com as mesmas linhas da fato da PA1. Só há esses três problemas: os 15 preços e os 10 clientes são as únicas diferenças, e os 20 itens repetidos explicam o resto. Os outros 13 dias não têm nenhuma diferença.
+
+**Como tratar o lote:**
+1. Manter o lote em quarentena: os arquivos em `data/raw/2018-05-09/` e as linhas na `raw_api_orders` ficam guardados como prova, e a fato segue com os 13 dias bons.
+2. Avisar o responsável pela API, com a saída do `dbt test`: 15 preços negativos, 10 itens sem cliente e 20 itens duplicados.
+3. Não carregar só as linhas boas: o dia ficaria incompleto e a receita errada, sem ninguém perceber.
+4. Quando a fonte corrigir os dados, rodar só esse dia de novo (`airflow tasks clear ... -s 2018-05-09 -e 2018-05-09`). O pipeline é idempotente, então nada duplica.
+5. Se aparecer um tipo de defeito que nenhum teste pegou, criar o teste antes de rodar de novo.
+
+### Tarefa 6 — Tarefa mais lenta
+
+Fonte: [`evidence/task_durations.csv`](evidence/task_durations.csv).
+
+A tarefa mais lenta é o `dbt_staging` (4,06 s em média). Com cerca de 300 itens por dia, quase todo esse tempo é a inicialização do dbt: ler o projeto, compilar os modelos e abrir o banco. As três tarefas do dbt repetem esse custo. A otimização seria trocá-las por um único `dbt build --select stg_api_orders+`. Ele constrói o staging, roda os testes e só constrói a `fact_sales` se os testes passarem. O portão continua a existir, e o dbt inicializa uma vez em vez de três. Medimos 4,3 s por dia, contra 10,7 s das três tarefas.
 
 ---
 
