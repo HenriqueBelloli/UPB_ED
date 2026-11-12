@@ -11,17 +11,15 @@ Plataforma de dados da NorthMart construída em três etapas (PA1, PA2, PA3) par
 
 ## Setup
 
-Requisitos: Python 3.12+ (testado com 3.14).
+O `requirements.txt` é o da disciplina e serve para a PA1 e a PA2. Ele pede **Python 3.12** e inclui o Airflow, que não roda nativamente no Windows, por isso o ambiente é montado no Ubuntu do WSL (ou noutro Linux/macOS). O passo a passo está em [PA2 → Preparar o ambiente](#preparar-o-ambiente-ubuntu-no-wsl). Ele cria o venv em `~/venvs/northmart`.
+
+Para rodar os scripts da PA1, basta ativar o venv, a partir da raiz do repositório:
 
 ```bash
-python -m venv .venv
-# Windows
-.venv\Scripts\activate
-# Linux / macOS / WSL
-source .venv/bin/activate
-
-pip install -r requirements.txt
+source ~/venvs/northmart/bin/activate
 ```
+
+Não use o `pa2_env.sh` para a PA1: ele aponta o `NORTHMART_DB` para o banco da PA2, e os scripts da PA1 gravariam nele em vez de em `data/northmart.duckdb`.
 
 ### Dados de origem
 
@@ -50,16 +48,21 @@ Contagem esperada de linhas:
 ```
 ├── README.md
 ├── requirements.txt
+├── mock_api.py     # API simulada da PA2 (uvicorn mock_api:app --port 8000)
+├── pa2_env.sh      # ativa o venv e define as variáveis da PA2
 ├── architecture/   # diagramas: star schema (PA1), pipeline (PA2)
 ├── data/
-│   ├── source/     # CSVs da Olist e JSON de sellers (não versionado)
+│   ├── source/     # CSVs da Olist, JSON de sellers e parquet da API (não versionado)
 │   ├── raw/        # respostas da API por data (PA2, não versionado)
 │   ├── staging/    # arquivos intermediários
 │   └── curated/    # exports em Parquet e saídas finais
-├── sql/            # profiling.sql, build_model.sql, queries de benchmark
-├── src/            # código Python
-├── tests/          # verificações fora do dbt
-└── evidence/       # tabela de benchmark, screenshots, contagens
+├── sql/            # profiling.sql, build_model.sql, queries de benchmark, pa2_reset_fact.sql
+├── src/            # código Python: extração e carga da API (PA2), scripts auxiliares
+├── dbt/            # PA2: projeto dbt (staging, marts e testes)
+├── airflow/
+│   └── dags/       # PA2: DAG northmart_daily
+├── tests/          # verificações fora do dbt (idempotência)
+└── evidence/       # benchmark, saídas do dbt test, print da grid, contagens
 ```
 
 ---
@@ -360,6 +363,8 @@ Um pipeline diário extrai os pedidos de uma API REST, grava as respostas numa c
 ```
 API (mock_api.py) → extract → data/raw/<data>/ → load → raw_api_orders → dbt staging → dbt test → dbt marts (fact_sales)
 ```
+
+Diagrama completo, papel de cada tarefa e decisões: [`architecture/pipeline.md`](architecture/pipeline.md).
 
 ### Preparar o ambiente (Ubuntu no WSL)
 
