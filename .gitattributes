@@ -1,2 +1,5 @@
 # Scripts de shell rodam no Ubuntu (WSL): precisam de quebra de linha LF
 *.sh text eol=lf
+
+# Roteiro do vídeo: só para o grupo, não entra no zip da entrega (git archive)
+roteiro_video_pa2.md export-ignore
