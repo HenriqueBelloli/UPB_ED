@@ -26,7 +26,7 @@ Este arquivo fica no repositório só para o grupo. O `.gitattributes` o tira do
    - colapsar o painel de detalhes;
    - conferir que as 14 colunas aparecem.
 3. Aumentar a fonte dos terminais (Ctrl + roda do mouse) e fechar o que não vai aparecer na tela.
-4. Ensaiar uma vez com o cronômetro. Cada `clear` leva de 30 s a 1 min até terminar: dá para cortar a espera na edição ou falar enquanto roda.
+4. Ensaiar uma vez com o cronômetro. Cada `clear` leva cerca de 20 s até terminar (medido no ensaio): dá para falar enquanto roda ou cortar a espera na edição. Se a cor da coluna demorar a mudar, recarregue a página (F5).
 
 **Atenção:** não rodar o `check_idempotency.py` enquanto uma execução estiver ativa. O DuckDB aceita um escritor por vez e o script daria erro de lock.
 
